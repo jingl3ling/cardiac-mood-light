@@ -6,7 +6,7 @@
     "watchPatterns": ["server/**", "Dockerfile", "railway.json", ".dockerignore"]
   },
   "deploy": {
-    "healthcheckPath": "/v1/cardiac/health",
+    "healthcheckPath": "/health",
     "healthcheckTimeout": 100,
     "restartPolicyType": "ON_FAILURE"
   }

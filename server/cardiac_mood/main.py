@@ -13,6 +13,7 @@ from typing import Any
 import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI, Header, HTTPException, Query
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field, field_validator
 
 from cardiac_mood.classifier import classify_heuristic
@@ -140,9 +141,49 @@ def pack_state(device_id: str, mood: str, reason: str, source: str) -> dict[str,
     return state
 
 
+_INDEX_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cardiac Mood Light API</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; color: #111; }
+    h1 { font-weight: 600; }
+    a { color: #0a58ca; }
+    code { background: #f4f4f5; padding: 0.1em 0.35em; border-radius: 4px; font-size: 0.9em; }
+    ul { padding-left: 1.25rem; }
+  </style>
+</head>
+<body>
+  <h1>Cardiac Mood Light</h1>
+  <p>FastAPI backend for BPM-window mood classification and ESP32 LED state.</p>
+  <ul>
+    <li><a href="/health">Health (JSON)</a> — <code>GET /health</code></li>
+    <li><a href="/v1/cardiac/health">Legacy health</a> — <code>GET /v1/cardiac/health</code></li>
+    <li><a href="/docs">OpenAPI docs</a> — <code>GET /docs</code></li>
+    <li><code>POST /v1/cardiac/analyze</code> — analyze BPM window (requires <code>x-api-key</code> when configured)</li>
+    <li><code>GET /v1/cardiac/latest</code> — latest mood for ESP32 (requires <code>x-api-key</code> when configured)</li>
+  </ul>
+</body>
+</html>"""
+
+
+@app.get("/", response_class=HTMLResponse)
+def index() -> str:
+    """Human-readable landing page for browser and uptime checks."""
+    return _INDEX_HTML
+
+
+@app.get("/health")
+def health_root() -> dict[str, str]:
+    """Simple health check for load balancers (e.g. Railway)."""
+    return {"status": "ok", "service": "cardiac-mood-light"}
+
+
 @app.get("/v1/cardiac/health")
 def health() -> dict[str, str]:
-    return {"status": "ok"}
+    return {"status": "ok", "service": "cardiac-mood-light"}
 
 
 @app.post("/v1/cardiac/analyze")

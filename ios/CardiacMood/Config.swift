@@ -1,8 +1,8 @@
 import Foundation
 
 enum Config {
-  /// Base URL only (no trailing slash), e.g. http://192.168.1.10:8080
-  static let baseURL = URL(string: "http://127.0.0.1:8080")!
+  /// Base URL only (no trailing slash), including scheme (https for production).
+  static let baseURL = URL(string: "https://cardiac-mood-light-production.up.railway.app")!
 
   /// Must match server `API_KEY` (can be empty on server → no auth)
   static let apiKey = "dev-change-me"

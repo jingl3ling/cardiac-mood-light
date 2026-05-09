@@ -22,6 +22,13 @@ Choose one approach:
 
 Set environment variables in Railway: `API_KEY` (optional), `ANTHROPIC_API_KEY` (optional), `CLAUDE_MODEL` (optional).
 
+**Production URL:** `https://cardiac-mood-light-production.up.railway.app`  
+- Browser / index: `GET /`  
+- Health (JSON): `GET /health`  
+- API docs: `GET /docs`
+
+The iOS app [`Config.swift`](ios/CardiacMood/Config.swift) defaults to this URL; override for local dev.
+
 ## Backend
 
 ```bash

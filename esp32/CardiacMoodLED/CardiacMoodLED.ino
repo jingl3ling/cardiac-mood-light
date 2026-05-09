@@ -17,9 +17,9 @@ static const char *WIFI_SSID = "CHANGE_ME";
 static const char *WIFI_PASSWORD = "CHANGE_ME";
 
 // Host only, no scheme (e.g. "192.168.1.10" or "api.example.com")
-static const char *CARDIAC_HOST = "192.168.1.10";
-static const uint16_t CARDIAC_PORT = 8080;
-static const bool USE_HTTPS = false;
+static const char *CARDIAC_HOST = "cardiac-mood-light-production.up.railway.app";
+static const uint16_t CARDIAC_PORT = 443;
+static const bool USE_HTTPS = true;
 
 static const char *DEVICE_ID = "device-001";
 static const char *API_KEY = "dev-change-me";
