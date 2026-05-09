@@ -10,11 +10,16 @@
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <FastLED.h>
+#include <math.h>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 #define CARDIAC_DEBUG 1
 
-static const char *WIFI_SSID = "CHANGE_ME";
-static const char *WIFI_PASSWORD = "CHANGE_ME";
+static const char *WIFI_SSID = "ARRIS-1165";
+static const char *WIFI_PASSWORD = "005340231883";
 
 // Host only, no scheme (e.g. "192.168.1.10" or "api.example.com")
 static const char *CARDIAC_HOST = "cardiac-mood-light-production.up.railway.app";
@@ -26,7 +31,7 @@ static const char *API_KEY = "dev-change-me";
 
 static const int LED_PIN = 13;
 static const int NUM_LEDS = 8;
-static const unsigned long POLL_MS = 3000;
+static const unsigned long POLL_MS = 1200;
 static const unsigned long WIFI_TIMEOUT_MS = 30000;
 static const unsigned long WIFI_RETRY_MS = 10000;
 
@@ -36,6 +41,11 @@ static unsigned long lastFetch = 0;
 static unsigned long lastWifiAttempt = 0;
 static bool g_wifiUp = false;
 static bool g_lastFetchOk = false;
+
+static bool g_powerOn = true;
+static bool g_blinkEnabled = false;
+static float g_blinkBpm = 72.0f;
+static int g_masterBrightness = 180;
 
 static bool isPlaceholderCredentials() {
   return (WIFI_SSID[0] == '\0' || strcmp(WIFI_SSID, "CHANGE_ME") == 0 ||
@@ -92,6 +102,44 @@ static bool tryConnectWifi() {
   Serial.println(WiFi.localIP());
   g_wifiUp = true;
   return true;
+}
+
+static void renderLeds() {
+  if (!g_powerOn) {
+    fill_solid(leds, NUM_LEDS, CRGB::Black);
+    FastLED.setBrightness(0);
+    FastLED.show();
+    return;
+  }
+
+  if (g_blinkEnabled) {
+    float bpm = g_blinkBpm;
+    if (bpm < 30.0f) bpm = 30.0f;
+    if (bpm > 220.0f) bpm = 220.0f;
+    float periodMs = 60000.0f / bpm;
+    float phase = fmodf((float)millis(), periodMs) / periodMs;
+    float pulse = (sinf(phase * 2.0f * (float)M_PI) + 1.0f) * 0.5f;
+    int minB = 10;
+    int b = minB + (int)(pulse * (float)(g_masterBrightness - minB));
+    if (b < 0) b = 0;
+    if (b > 255) b = 255;
+    fill_solid(leds, NUM_LEDS, g_solid);
+    FastLED.setBrightness((uint8_t)b);
+    FastLED.show();
+    return;
+  }
+
+  if (!g_lastFetchOk) {
+    showHttpFail();
+    return;
+  }
+
+  fill_solid(leds, NUM_LEDS, g_solid);
+  int bb = g_masterBrightness;
+  if (bb < 0) bb = 0;
+  if (bb > 255) bb = 255;
+  FastLED.setBrightness((uint8_t)bb);
+  FastLED.show();
 }
 
 static bool parseColorHex(const char *s, CRGB &out) {
@@ -171,6 +219,15 @@ static bool fetchCardiac() {
   int bright = doc["brightness"].is<int>() ? doc["brightness"].as<int>() : 180;
   if (bright < 0) bright = 0;
   if (bright > 255) bright = 255;
+  g_masterBrightness = bright;
+
+  g_powerOn = doc["powerOn"] | true;
+  g_blinkEnabled = doc["blinkEnabled"] | false;
+  if (!doc["blinkBpm"].isNull()) {
+    g_blinkBpm = doc["blinkBpm"].as<float>();
+  }
+  if (g_blinkBpm < 30.0f) g_blinkBpm = 30.0f;
+  if (g_blinkBpm > 220.0f) g_blinkBpm = 220.0f;
 
   CRGB next;
   if (!col || !parseColorHex(col, next)) {
@@ -179,9 +236,6 @@ static bool fetchCardiac() {
   }
 
   g_solid = next;
-  fill_solid(leds, NUM_LEDS, g_solid);
-  FastLED.setBrightness((uint8_t)bright);
-  FastLED.show();
   g_lastFetchOk = true;
   return true;
 }
@@ -223,15 +277,12 @@ void loop() {
   g_wifiUp = true;
 
   unsigned long now = millis();
-  if (now - lastFetch < POLL_MS) {
-    if (!g_lastFetchOk) {
-      showHttpFail();
+  if (now - lastFetch >= POLL_MS) {
+    lastFetch = now;
+    if (!fetchCardiac()) {
+      Serial.println(F("fetch failed"));
     }
-    return;
   }
-  lastFetch = now;
 
-  if (!fetchCardiac()) {
-    Serial.println(F("fetch failed"));
-  }
+  renderLeds();
 }

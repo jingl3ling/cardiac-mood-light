@@ -5,19 +5,20 @@ import UIKit
 private struct MoodPreset: Identifiable {
   let id: String
   let title: String
-  let caption: String
   let hex: String
   let symbol: String
 }
 
 private let moodPresets: [MoodPreset] = [
-  MoodPreset(id: "calm", title: "Calm", caption: "Yellow · baseline", hex: "#FFD700", symbol: "leaf.fill"),
-  MoodPreset(id: "stressed", title: "Stressed", caption: "Red · escalating", hex: "#FF0000", symbol: "bolt.heart.fill"),
-  MoodPreset(id: "happy", title: "Happy", caption: "Pink · energetic", hex: "#FF69B4", symbol: "sun.max.fill"),
-  MoodPreset(id: "sad", title: "Sad", caption: "Blue · drained", hex: "#4169E1", symbol: "cloud.rain.fill"),
+  MoodPreset(id: "calm", title: "Calm", hex: "#FFD700", symbol: "leaf.fill"),
+  MoodPreset(id: "stressed", title: "Stressed", hex: "#FF0000", symbol: "bolt.heart.fill"),
+  MoodPreset(id: "happy", title: "Happy", hex: "#FF69B4", symbol: "sun.max.fill"),
+  MoodPreset(id: "sad", title: "Sad", hex: "#4169E1", symbol: "cloud.rain.fill"),
 ]
 
 private let validMoods = Set(moodPresets.map(\.id))
+
+private let lampSyncDebounceNs: UInt64 = 260_000_000
 
 struct ContentView: View {
   @EnvironmentObject private var hub: MoodHub
@@ -25,6 +26,7 @@ struct ContentView: View {
   @State private var selectedMoodId = "calm"
   @State private var customColorEnabled = false
   @State private var customColor = Color(red: 1, green: 215 / 255, blue: 0)
+  @State private var debouncedLampTask: Task<Void, Never>?
 
   private var selectedPreset: MoodPreset {
     moodPresets.first { $0.id == selectedMoodId } ?? moodPresets[0]
@@ -37,73 +39,54 @@ struct ContentView: View {
     return selectedPreset.hex
   }
 
+  private var brightnessSliderBinding: Binding<Double> {
+    Binding(
+      get: { hub.lampBrightness },
+      set: { newValue in
+        hub.lampBrightness = newValue
+        scheduleLampSyncDebounced()
+      }
+    )
+  }
+
   var body: some View {
     NavigationStack {
-      ScrollView {
-        VStack(alignment: .leading, spacing: 20) {
-          lampPreviewCard
+      ZStack {
+        CuteBackgroundView()
 
-          VStack(alignment: .leading, spacing: 10) {
-            Text("Mood")
-              .font(.subheadline.weight(.semibold))
-              .foregroundStyle(.secondary)
+        ScrollView {
+          VStack(alignment: .leading, spacing: 18) {
+            CuteCard {
+              powerControlRow
+            }
 
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-              ForEach(moodPresets) { preset in
-                moodTile(preset, isSelected: preset.id == selectedMoodId)
-              }
+            CuteCard {
+              lampPreviewRow
+            }
+
+            CuteCard {
+              moodsAndBlinkSection
+            }
+
+            CuteCard {
+              brightnessSection
+            }
+
+            CuteCard {
+              customColorSection
+            }
+
+            CuteCard {
+              watchAndHealthSection
             }
           }
-
-          VStack(alignment: .leading, spacing: 8) {
-            HStack {
-              Text("Brightness")
-                .font(.subheadline.weight(.semibold))
-              Spacer()
-              Text("\(Int(hub.lampBrightness.rounded()))")
-                .font(.subheadline.monospacedDigit())
-                .foregroundStyle(.secondary)
-            }
-            Slider(value: $hub.lampBrightness, in: 0 ... 255, step: 1)
-              .tint(Color(hex: previewHex) ?? .accentColor)
-          }
-          .padding(16)
-          .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-
-          VStack(alignment: .leading, spacing: 12) {
-            Toggle("Custom color", isOn: $customColorEnabled)
-              .tint(.pink)
-            if customColorEnabled {
-              ColorPicker("Tint", selection: $customColor, supportsOpacity: false)
-                .labelsHidden()
-            }
-          }
-          .padding(16)
-          .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-
-          Button {
-            Task {
-              await hub.pushManualLamp(
-                mood: selectedMoodId,
-                brightness: Int(hub.lampBrightness.rounded()),
-                colorHexOverride: customColorEnabled ? customColor.rgbHexString() : nil
-              )
-            }
-          } label: {
-            Label("Update lamp", systemImage: "lightbulb.led.wide.fill")
-              .frame(maxWidth: .infinity)
-          }
-          .buttonStyle(.borderedProminent)
-          .controlSize(.large)
-          .disabled(hub.isSending)
-
-          watchAndHealthSection
+          .padding(.horizontal, 18)
+          .padding(.bottom, 28)
         }
-        .padding()
       }
-      .background(Color(uiColor: .systemGroupedBackground))
-      .navigationTitle("Mood light")
+      .navigationTitle("Little Lamp ✨")
       .navigationBarTitleDisplayMode(.large)
+      .toolbarBackground(.visible, for: .navigationBar)
     }
     .task {
       await hub.authorizeHealthIfNeeded()
@@ -116,48 +99,137 @@ struct ContentView: View {
         customColor = Color(hex: selectedPreset.hex) ?? customColor
       }
     }
-    .onChange(of: selectedMoodId) { _, _ in
-      if !customColorEnabled {
-        customColor = Color(hex: selectedPreset.hex) ?? customColor
-      }
-    }
-    .onChange(of: customColorEnabled) { _, enabled in
-      if enabled {
-        customColor = Color(hex: selectedPreset.hex) ?? customColor
-      }
+    .onDisappear {
+      debouncedLampTask?.cancel()
+      debouncedLampTask = nil
     }
   }
 
-  private var lampPreviewCard: some View {
-    VStack(alignment: .leading, spacing: 12) {
-      HStack(spacing: 14) {
-        RoundedRectangle(cornerRadius: 14, style: .continuous)
-          .fill(Color(hex: previewHex) ?? Color.gray.opacity(0.35))
-          .frame(width: 72, height: 72)
-          .overlay {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-              .strokeBorder(.white.opacity(0.25), lineWidth: 1)
-          }
-          .shadow(color: (Color(hex: previewHex) ?? .clear).opacity(0.45), radius: 16, y: 6)
+  private var powerControlRow: some View {
+    HStack(spacing: 14) {
+      Image(systemName: hub.lampPowerOn ? "power.circle.fill" : "power.circle")
+        .font(.system(size: 32))
+        .foregroundStyle(hub.lampPowerOn ? Color.green : Color.secondary)
+        .symbolRenderingMode(.hierarchical)
+        .accessibilityHidden(true)
 
-        VStack(alignment: .leading, spacing: 4) {
-          Text(hub.lastLabel == "—" ? selectedPreset.title : hub.lastLabel)
-            .font(.title3.weight(.semibold))
-          Text(
-            hub.lastUpdatedText.isEmpty
-              ? "Choose a mood, adjust brightness, then update the lamp."
-              : "Last sent \(hub.lastUpdatedText)"
-          )
-          .font(.caption)
+      VStack(alignment: .leading, spacing: 4) {
+        Text("Lamp")
+          .font(.system(.title3, design: .rounded).weight(.bold))
+        Text(hub.lampPowerOn ? "On" : "Off")
+          .font(.system(.subheadline, design: .rounded).weight(.medium))
           .foregroundStyle(.secondary)
-        }
-        Spacer(minLength: 0)
       }
 
-      if !hub.lastReason.isEmpty {
-        Text(hub.lastReason)
-          .font(.caption)
-          .foregroundStyle(.tertiary)
+      Spacer(minLength: 12)
+
+      Toggle("", isOn: $hub.lampPowerOn)
+      .labelsHidden()
+      .tint(Color(red: 0.2, green: 0.78, blue: 0.45))
+      .scaleEffect(1.35)
+      .padding(12)
+      .frame(minWidth: 88, minHeight: 52)
+      .contentShape(Rectangle())
+      .accessibilityLabel("Lamp power")
+      .onChange(of: hub.lampPowerOn) { _, _ in
+        syncLampImmediate()
+      }
+    }
+    .padding(.vertical, 6)
+  }
+
+  private var lampPreviewRow: some View {
+    HStack(alignment: .center, spacing: 16) {
+      ZStack {
+        Circle()
+          .fill(
+            RadialGradient(
+              colors: [
+                (Color(hex: previewHex) ?? .pink).opacity(hub.lampPowerOn ? 0.95 : 0.25),
+                (Color(hex: previewHex) ?? .purple).opacity(hub.lampPowerOn ? 0.35 : 0.12),
+              ],
+              center: .center,
+              startRadius: 4,
+              endRadius: 52
+            )
+          )
+          .frame(width: 88, height: 88)
+          .overlay {
+            Circle()
+              .strokeBorder(.white.opacity(0.35), lineWidth: 2)
+          }
+          .shadow(color: (Color(hex: previewHex) ?? .clear).opacity(hub.lampPowerOn ? 0.45 : 0.15), radius: hub.blinkEnabled ? 14 : 10, y: 6)
+
+        Image(systemName: hub.blinkEnabled ? "heart.circle.fill" : "sparkles")
+          .font(.system(size: 28))
+          .foregroundStyle(.white.opacity(0.92))
+          .shadow(radius: 2)
+          .opacity(hub.lampPowerOn ? 1 : 0.35)
+      }
+
+      VStack(alignment: .leading, spacing: 6) {
+        Text(hub.lastLabel == "—" ? selectedPreset.title : hub.lastLabel)
+          .font(.system(.title3, design: .rounded).weight(.bold))
+          .foregroundStyle(.primary)
+        if !hub.lastUpdatedText.isEmpty {
+          Text(hub.lastUpdatedText)
+            .font(.system(.caption, design: .rounded))
+            .foregroundStyle(.secondary)
+        }
+      }
+      Spacer(minLength: 0)
+    }
+  }
+
+  private var moodsAndBlinkSection: some View {
+    VStack(alignment: .leading, spacing: 16) {
+      LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+        ForEach(moodPresets) { preset in
+          moodTile(preset, isSelected: preset.id == selectedMoodId)
+        }
+      }
+
+      Divider().opacity(0.35)
+
+      HStack(spacing: 8) {
+        Image(systemName: "waveform.path.ecg")
+          .foregroundStyle(Color.pink.opacity(0.85))
+        Text("Blink")
+          .font(.system(.headline, design: .rounded).weight(.semibold))
+      }
+
+      Toggle(isOn: $hub.blinkEnabled) {
+        Text("Blink to BPM")
+          .font(.system(.subheadline, design: .rounded).weight(.medium))
+      }
+      .tint(.pink)
+      .onChange(of: hub.blinkEnabled) { _, _ in
+        syncLampImmediate()
+      }
+
+      VStack(alignment: .leading, spacing: 10) {
+        HStack {
+          Text("Beats per minute")
+            .font(.system(.subheadline, design: .rounded))
+          Spacer()
+          Text("\(Int(hub.blinkBpm.rounded()))")
+            .font(.system(.title3, design: .rounded).weight(.bold).monospacedDigit())
+            .foregroundStyle(Color.pink.opacity(0.9))
+        }
+
+        Slider(value: $hub.blinkBpm, in: 30 ... 220, step: 1)
+          .tint(.pink.opacity(0.85))
+
+        TextField("e.g. 72", value: $hub.blinkBpm, format: .number.precision(.fractionLength(0)))
+          .keyboardType(.numberPad)
+          .textFieldStyle(.roundedBorder)
+          .font(.system(.body, design: .rounded).weight(.medium).monospacedDigit())
+      }
+      .opacity(hub.blinkEnabled ? 1 : 0.45)
+      .allowsHitTesting(hub.blinkEnabled)
+      .onChange(of: hub.blinkBpm) { _, newVal in
+        hub.blinkBpm = min(220, max(30, newVal))
+        scheduleLampSyncDebounced()
       }
 
       if hub.isSending {
@@ -166,85 +238,187 @@ struct ContentView: View {
       }
       if !hub.lastError.isEmpty {
         Text(hub.lastError)
-          .font(.caption)
+          .font(.system(.caption, design: .rounded))
           .foregroundStyle(.red)
       }
     }
-    .padding(16)
-    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+  }
+
+  private var brightnessSection: some View {
+    VStack(alignment: .leading, spacing: 10) {
+      HStack {
+        Text("Glow")
+          .font(.system(.headline, design: .rounded).weight(.semibold))
+        Spacer()
+        Text("\(Int(hub.lampBrightness.rounded()))")
+          .font(.system(.title3, design: .rounded).weight(.bold).monospacedDigit())
+          .foregroundStyle(Color(hex: previewHex)?.opacity(0.95) ?? .primary)
+      }
+      Slider(value: brightnessSliderBinding, in: 0 ... 255, step: 1)
+        .tint(Color(hex: previewHex) ?? .pink)
+    }
+  }
+
+  private var customColorSection: some View {
+    VStack(alignment: .leading, spacing: 12) {
+      Toggle(isOn: $customColorEnabled) {
+        Text("Custom tint")
+          .font(.system(.headline, design: .rounded).weight(.semibold))
+      }
+      .tint(Color(red: 0.98, green: 0.55, blue: 0.72))
+      .onChange(of: customColorEnabled) { _, enabled in
+        if enabled {
+          customColor = Color(hex: selectedPreset.hex) ?? customColor
+        }
+        syncLampImmediate()
+      }
+
+      if customColorEnabled {
+        ColorPicker("Tint", selection: $customColor, supportsOpacity: false)
+          .labelsHidden()
+          .onChange(of: customColor) { _, _ in
+            guard customColorEnabled else { return }
+            scheduleLampSyncDebounced()
+          }
+      }
+    }
+  }
+
+  private var watchAndHealthSection: some View {
+    VStack(alignment: .leading, spacing: 12) {
+      Label("Heart rate", systemImage: "heart.text.square.fill")
+        .font(.system(.subheadline, design: .rounded).weight(.bold))
+        .foregroundStyle(.secondary)
+
+      HStack {
+        Text(hub.authorizationStatus)
+        if hub.watchSessionActive {
+          Text("Watch")
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+        }
+      }
+      .font(.system(.caption, design: .rounded))
+      .foregroundStyle(.secondary)
+
+      Button("Health access") {
+        Task { await hub.authorizeHealthIfNeeded() }
+      }
+      .font(.system(.subheadline, design: .rounded).weight(.medium))
+      .buttonStyle(.bordered)
+    }
+  }
+
+  private func scheduleLampSyncDebounced() {
+    debouncedLampTask?.cancel()
+    debouncedLampTask = Task {
+      try? await Task.sleep(nanoseconds: lampSyncDebounceNs)
+      guard !Task.isCancelled else { return }
+      await hub.pushManualLamp(
+        mood: selectedMoodId,
+        brightness: Int(hub.lampBrightness.rounded()),
+        colorHexOverride: customColorEnabled ? customColor.rgbHexString() : nil,
+        powerOn: hub.lampPowerOn,
+        blinkEnabled: hub.blinkEnabled,
+        blinkBpm: hub.blinkBpm
+      )
+    }
+  }
+
+  private func syncLampImmediate() {
+    debouncedLampTask?.cancel()
+    debouncedLampTask = nil
+    Task {
+      await hub.pushManualLamp(
+        mood: selectedMoodId,
+        brightness: Int(hub.lampBrightness.rounded()),
+        colorHexOverride: customColorEnabled ? customColor.rgbHexString() : nil,
+        powerOn: hub.lampPowerOn,
+        blinkEnabled: hub.blinkEnabled,
+        blinkBpm: hub.blinkBpm
+      )
+    }
   }
 
   @ViewBuilder
   private func moodTile(_ preset: MoodPreset, isSelected: Bool) -> some View {
     Button {
       selectedMoodId = preset.id
+      if !customColorEnabled {
+        customColor = Color(hex: preset.hex) ?? customColor
+      }
+      syncLampImmediate()
     } label: {
-      VStack(alignment: .leading, spacing: 8) {
+      VStack(alignment: .leading, spacing: 10) {
         HStack {
           Image(systemName: preset.symbol)
-            .font(.title3)
-            .foregroundStyle(Color(hex: preset.hex) ?? .primary)
+            .font(.system(size: 22))
+            .foregroundStyle(Color(hex: preset.hex) ?? .pink)
+            .shadow(color: (Color(hex: preset.hex) ?? .clear).opacity(0.35), radius: 4, y: 2)
           Spacer()
           if isSelected {
             Image(systemName: "checkmark.circle.fill")
-              .foregroundStyle(.blue)
+              .foregroundStyle(Color(red: 0.45, green: 0.75, blue: 0.98))
+              .symbolRenderingMode(.hierarchical)
           }
         }
         Text(preset.title)
-          .font(.headline)
-          .foregroundStyle(.primary)
-        Text(preset.caption)
-          .font(.caption2)
-          .foregroundStyle(.secondary)
-          .multilineTextAlignment(.leading)
+          .font(.system(.headline, design: .rounded).weight(.bold))
       }
       .frame(maxWidth: .infinity, alignment: .leading)
       .padding(14)
       .background(
-        RoundedRectangle(cornerRadius: 14, style: .continuous)
-          .fill(isSelected ? Color.blue.opacity(0.12) : Color(uiColor: .secondarySystemGroupedBackground))
+        RoundedRectangle(cornerRadius: 18, style: .continuous)
+          .fill(
+            isSelected
+              ? Color(red: 0.92, green: 0.96, blue: 1.0)
+              : Color(uiColor: .secondarySystemGroupedBackground).opacity(0.65)
+          )
       )
       .overlay(
-        RoundedRectangle(cornerRadius: 14, style: .continuous)
-          .strokeBorder(isSelected ? Color.blue.opacity(0.45) : Color.clear, lineWidth: 2)
+        RoundedRectangle(cornerRadius: 18, style: .continuous)
+          .strokeBorder(
+            isSelected ? Color(red: 0.55, green: 0.78, blue: 0.98).opacity(0.65) : Color.white.opacity(0.12),
+            lineWidth: isSelected ? 2 : 1
+          )
       )
     }
     .buttonStyle(.plain)
   }
+}
 
-  private var watchAndHealthSection: some View {
-    VStack(alignment: .leading, spacing: 14) {
-      Text("Heart rate")
-        .font(.subheadline.weight(.semibold))
-        .foregroundStyle(.secondary)
+// MARK: - Cute chrome
 
-      HStack {
-        Text(hub.authorizationStatus)
-        if hub.watchSessionActive {
-          Text("Watch linked")
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-        }
-      }
-      .font(.caption)
-      .foregroundStyle(.secondary)
+private struct CuteBackgroundView: View {
+  var body: some View {
+    LinearGradient(
+      colors: [
+        Color(red: 0.99, green: 0.93, blue: 0.97),
+        Color(red: 0.93, green: 0.96, blue: 1.0),
+        Color(red: 0.94, green: 0.99, blue: 0.96),
+      ],
+      startPoint: .topLeading,
+      endPoint: .bottomTrailing
+    )
+    .ignoresSafeArea()
+  }
+}
 
-      Button("Authorize Health (resting HR)") {
-        Task { await hub.authorizeHealthIfNeeded() }
-      }
-      .buttonStyle(.bordered)
+private struct CuteCard<Content: View>: View {
+  @ViewBuilder var content: () -> Content
 
-      Text("On the Watch, tap Start session. Each BPM window is sent here for analysis and updates the lamp automatically.")
-        .font(.footnote)
-        .foregroundStyle(.secondary)
-
-      Text("ESP32 polls device **\(Config.deviceId)** — match `DEVICE_ID` on the board.")
-        .font(.caption2)
-        .foregroundStyle(.tertiary)
-    }
-    .padding(16)
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+  var body: some View {
+    content()
+      .padding(16)
+      .background(
+        RoundedRectangle(cornerRadius: 22, style: .continuous)
+          .fill(.ultraThinMaterial)
+          .shadow(color: .black.opacity(0.06), radius: 12, y: 6)
+      )
+      .overlay(
+        RoundedRectangle(cornerRadius: 22, style: .continuous)
+          .strokeBorder(Color.white.opacity(0.55), lineWidth: 1)
+      )
   }
 }
 

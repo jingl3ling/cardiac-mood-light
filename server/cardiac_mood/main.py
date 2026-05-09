@@ -69,6 +69,9 @@ class ManualLampBody(BaseModel):
         None,
         description="Optional #RRGGBB; if set, overrides palette color for the device",
     )
+    powerOn: bool = Field(True, description="When false, ESP32 keeps LEDs off")
+    blinkEnabled: bool = Field(False, description="Pulse LEDs to blinkBpm when true")
+    blinkBpm: float = Field(72.0, ge=30.0, le=220.0, description="Target BPM for blink rhythm")
 
     @field_validator("mood")
     @classmethod
@@ -158,8 +161,22 @@ async def classify_claude(resting_bpm: float | None, bpms: list[float]) -> tuple
     return mood, reason
 
 
+def _prev_extras(device_id: str) -> tuple[bool, bool, float]:
+    prev = _STORE.get(device_id) or {}
+    power_on = bool(prev.get("powerOn", True))
+    blink_en = bool(prev.get("blinkEnabled", False))
+    try:
+        bpm = float(prev.get("blinkBpm", 72.0))
+    except (TypeError, ValueError):
+        bpm = 72.0
+    bpm = max(30.0, min(220.0, bpm))
+    return power_on, blink_en, bpm
+
+
 def pack_state(device_id: str, mood: str, reason: str, source: str) -> dict[str, Any]:
+    """Analyze path: keep lamp power + blink settings from last manual/device state."""
     st = STYLE[mood]
+    power_on, blink_en, bpm = _prev_extras(device_id)
     state = {
         "deviceId": device_id,
         "mood": mood,
@@ -169,14 +186,27 @@ def pack_state(device_id: str, mood: str, reason: str, source: str) -> dict[str,
         "reason": reason,
         "source": source,
         "updatedAt": time.time(),
+        "powerOn": power_on,
+        "blinkEnabled": blink_en,
+        "blinkBpm": bpm,
     }
     _STORE[device_id] = state
     return state
 
 
-def pack_manual(device_id: str, mood: str, brightness: int, color_override: str | None) -> dict[str, Any]:
+def pack_manual(
+    device_id: str,
+    mood: str,
+    brightness: int,
+    color_override: str | None,
+    *,
+    power_on: bool,
+    blink_enabled: bool,
+    blink_bpm: float,
+) -> dict[str, Any]:
     st = STYLE[mood]
     color = color_override if color_override else st["color"]
+    bpm = max(30.0, min(220.0, float(blink_bpm)))
     state = {
         "deviceId": device_id,
         "mood": mood,
@@ -186,6 +216,9 @@ def pack_manual(device_id: str, mood: str, brightness: int, color_override: str 
         "reason": "manual_ios",
         "source": "manual",
         "updatedAt": time.time(),
+        "powerOn": power_on,
+        "blinkEnabled": blink_enabled,
+        "blinkBpm": bpm,
     }
     _STORE[device_id] = state
     return state
@@ -271,6 +304,9 @@ async def analyze(
         "reason": state["reason"],
         "source": state["source"],
         "updatedAt": state["updatedAt"],
+        "powerOn": state["powerOn"],
+        "blinkEnabled": state["blinkEnabled"],
+        "blinkBpm": state["blinkBpm"],
     }
 
 
@@ -281,7 +317,15 @@ async def manual_lamp(
 ) -> dict[str, Any]:
     """Push lamp state so ESP32 picks it up on the next GET /v1/cardiac/latest poll."""
     require_api_key(x_api_key)
-    state = pack_manual(body.deviceId, body.mood, body.brightness, body.color)
+    state = pack_manual(
+        body.deviceId,
+        body.mood,
+        body.brightness,
+        body.color,
+        power_on=body.powerOn,
+        blink_enabled=body.blinkEnabled,
+        blink_bpm=body.blinkBpm,
+    )
     return {
         "ok": True,
         "mood": state["mood"],
@@ -291,6 +335,9 @@ async def manual_lamp(
         "reason": state["reason"],
         "source": state["source"],
         "updatedAt": state["updatedAt"],
+        "powerOn": state["powerOn"],
+        "blinkEnabled": state["blinkEnabled"],
+        "blinkBpm": state["blinkBpm"],
     }
 
 
@@ -309,4 +356,7 @@ def latest(
         "color": row["color"],
         "brightness": row["brightness"],
         "updatedAt": row["updatedAt"],
+        "powerOn": row.get("powerOn", True),
+        "blinkEnabled": row.get("blinkEnabled", False),
+        "blinkBpm": float(row.get("blinkBpm", 72.0)),
     }

@@ -15,7 +15,13 @@ final class MoodHub: NSObject, ObservableObject {
   @Published var lastError = ""
   @Published var watchSessionActive = false
   /// Mirrors server brightness for the lamp slider (0…255).
-  @Published var lampBrightness: Double = 180
+  @Published var lampBrightness: Double = 120
+  @Published var lampPowerOn = true
+  @Published var blinkEnabled = false
+  @Published var blinkBpm: Double = 72
+
+  /// Increments on each manual lamp request so slower responses cannot overwrite newer state.
+  private var manualLampGeneration = 0
 
   private let baseline = HealthBaselineReader()
   private let api = CardiacAPIClient()
@@ -101,25 +107,42 @@ final class MoodHub: NSObject, ObservableObject {
     lastColorHex = resp.color
     lastReason = resp.reason ?? ""
     lampBrightness = Double(resp.brightness)
+    if let v = resp.powerOn { lampPowerOn = v }
+    if let v = resp.blinkEnabled { blinkEnabled = v }
+    if let v = resp.blinkBpm { blinkBpm = min(220, max(30, v)) }
     lastUpdatedText = DateFormatter.localizedString(from: Date(), dateStyle: .none, timeStyle: .medium)
   }
 
   /// Push lamp color/brightness to the server; ESP32 picks it up on the next `/v1/cardiac/latest` poll.
-  func pushManualLamp(mood: String, brightness: Int, colorHexOverride: String?) async {
-    lastError = ""
-    isSending = true
-    defer { isSending = false }
+  /// Does not toggle `isSending` (no blocking spinner); stale completions are ignored via generation.
+  func pushManualLamp(
+    mood: String,
+    brightness: Int,
+    colorHexOverride: String?,
+    powerOn: Bool,
+    blinkEnabled: Bool,
+    blinkBpm: Double
+  ) async {
+    manualLampGeneration += 1
+    let token = manualLampGeneration
 
     let b = min(255, max(0, brightness))
+    let bpmClamped = min(220, max(30, blinkBpm))
     do {
       let resp = try await api.manualLamp(
         deviceId: Config.deviceId,
         mood: mood,
         brightness: b,
-        colorHex: colorHexOverride
+        colorHex: colorHexOverride,
+        powerOn: powerOn,
+        blinkEnabled: blinkEnabled,
+        blinkBpm: bpmClamped
       )
+      guard token == manualLampGeneration else { return }
       applyAnalyzeResponse(resp)
+      lastError = ""
     } catch {
+      guard token == manualLampGeneration else { return }
       lastError = String(describing: error)
     }
   }

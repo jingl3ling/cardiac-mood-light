@@ -20,6 +20,9 @@ struct AnalyzeResponseBody: Codable {
   let reason: String?
   let source: String?
   let updatedAt: Double?
+  let powerOn: Bool?
+  let blinkEnabled: Bool?
+  let blinkBpm: Double?
 }
 
 struct ManualLampRequestBody: Codable {
@@ -28,6 +31,9 @@ struct ManualLampRequestBody: Codable {
   let brightness: Int
   /// When set, overrides palette color (`#RRGGBB`).
   let color: String?
+  let powerOn: Bool
+  let blinkEnabled: Bool
+  let blinkBpm: Double
 }
 
 enum CardiacAPIError: Error {
@@ -58,14 +64,31 @@ struct CardiacAPIClient {
     return try JSONDecoder().decode(AnalyzeResponseBody.self, from: data)
   }
 
-  func manualLamp(deviceId: String, mood: String, brightness: Int, colorHex: String?) async throws -> AnalyzeResponseBody {
+  func manualLamp(
+    deviceId: String,
+    mood: String,
+    brightness: Int,
+    colorHex: String?,
+    powerOn: Bool,
+    blinkEnabled: Bool,
+    blinkBpm: Double
+  ) async throws -> AnalyzeResponseBody {
     var req = URLRequest(url: Config.baseURL.appendingPathComponent("/v1/cardiac/manual"))
     req.httpMethod = "POST"
     req.setValue("application/json", forHTTPHeaderField: "Content-Type")
     if !Config.apiKey.isEmpty {
       req.setValue(Config.apiKey, forHTTPHeaderField: "x-api-key")
     }
-    let body = ManualLampRequestBody(deviceId: deviceId, mood: mood, brightness: brightness, color: colorHex)
+    let bpm = min(220, max(30, blinkBpm))
+    let body = ManualLampRequestBody(
+      deviceId: deviceId,
+      mood: mood,
+      brightness: brightness,
+      color: colorHex,
+      powerOn: powerOn,
+      blinkEnabled: blinkEnabled,
+      blinkBpm: bpm
+    )
     req.httpBody = try JSONEncoder().encode(body)
 
     let (data, resp) = try await session.data(for: req)
