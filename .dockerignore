@@ -1,0 +1,9 @@
+.git
+**/.venv
+**/__pycache__
+**/*.pyc
+ios
+esp32
+uids.txt
+*.md
+.cursor

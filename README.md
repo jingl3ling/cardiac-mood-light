@@ -11,6 +11,17 @@ Apple Watch collects a short BPM window; the iPhone adds **resting heart rate** 
 | Happy | `#FF69B4` | 220 |
 | Sad | `#4169E1` | 115 |
 
+## Deploy on Railway
+
+This repo is a **monorepo**. Railpack looks at the repository root, so it does not see `server/requirements.txt` unless you isolate the backend.
+
+Choose one approach:
+
+1. **Recommended (no dashboard tweak):** Commit the root [`Dockerfile`](Dockerfile) and [`railway.json`](railway.json). Railway will build with **Dockerfile** and run Uvicorn with `$PORT`.
+2. **Alternative:** In the Railway service **Settings → Root Directory**, set **`server`**. Then Railpack detects Python from `server/requirements.txt`.
+
+Set environment variables in Railway: `API_KEY` (optional), `ANTHROPIC_API_KEY` (optional), `CLAUDE_MODEL` (optional).
+
 ## Backend
 
 ```bash
