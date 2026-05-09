@@ -22,6 +22,14 @@ struct AnalyzeResponseBody: Codable {
   let updatedAt: Double?
 }
 
+struct ManualLampRequestBody: Codable {
+  let deviceId: String
+  let mood: String
+  let brightness: Int
+  /// When set, overrides palette color (`#RRGGBB`).
+  let color: String?
+}
+
 enum CardiacAPIError: Error {
   case badStatus(Int)
   case decodeFailed
@@ -42,6 +50,22 @@ struct CardiacAPIClient {
       req.setValue(Config.apiKey, forHTTPHeaderField: "x-api-key")
     }
     let body = AnalyzeRequestBody(deviceId: deviceId, restingBpm: restingBpm, samples: samples)
+    req.httpBody = try JSONEncoder().encode(body)
+
+    let (data, resp) = try await session.data(for: req)
+    guard let http = resp as? HTTPURLResponse else { throw CardiacAPIError.badStatus(-1) }
+    guard (200 ... 299).contains(http.statusCode) else { throw CardiacAPIError.badStatus(http.statusCode) }
+    return try JSONDecoder().decode(AnalyzeResponseBody.self, from: data)
+  }
+
+  func manualLamp(deviceId: String, mood: String, brightness: Int, colorHex: String?) async throws -> AnalyzeResponseBody {
+    var req = URLRequest(url: Config.baseURL.appendingPathComponent("/v1/cardiac/manual"))
+    req.httpMethod = "POST"
+    req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    if !Config.apiKey.isEmpty {
+      req.setValue(Config.apiKey, forHTTPHeaderField: "x-api-key")
+    }
+    let body = ManualLampRequestBody(deviceId: deviceId, mood: mood, brightness: brightness, color: colorHex)
     req.httpBody = try JSONEncoder().encode(body)
 
     let (data, resp) = try await session.data(for: req)

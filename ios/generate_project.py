@@ -5,6 +5,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 uids = Path(ROOT / "uids.txt").read_text().strip().split()
+
+# Apple Developer Team ID (10 chars). Both iOS + Watch must match for embedded Watch apps.
+DEV_TEAM = "877MZL68G8"
+
+# False: CardiacMood scheme builds only the iOS app (faster iteration; no Watch in the IPA).
+# True: Watch app is a dependency and is embedded (restore before shipping a companion Watch build).
+EMBED_WATCH_IN_IOS_APP = False
 it = iter(uids)
 
 
@@ -98,23 +105,25 @@ for fr, bf, name in IOS_FILES:
 for fr, bf, name in W_FILES:
     ln(f"\t\t{bf} /* {name} in Sources */ = {{isa = PBXBuildFile; fileRef = {fr} /* {name} */; }};")
 
-ln(f"\t\t{BF_EMB} /* CardiacMoodWatch.app in Embed Watch Content */ = {{isa = PBXBuildFile; fileRef = {WATCH_APP_R} /* CardiacMoodWatch.app */; settings = {{ATTRIBUTES = (RemoveHeadersOnCopy, ); }}; }};")
+if EMBED_WATCH_IN_IOS_APP:
+    ln(f"\t\t{BF_EMB} /* CardiacMoodWatch.app in Embed Watch Content */ = {{isa = PBXBuildFile; fileRef = {WATCH_APP_R} /* CardiacMoodWatch.app */; settings = {{ATTRIBUTES = (RemoveHeadersOnCopy, ); }}; }};")
 ln("/* End PBXBuildFile section */")
 ln("")
-ln("/* Begin PBXCopyFilesBuildPhase section */")
-ln(f"\t\t{EMB_PHASE} /* Embed Watch Content */ = {{")
-ln("\t\t\tisa = PBXCopyFilesBuildPhase;")
-ln("\t\t\tbuildActionMask = 2147483647;")
-ln('\t\t\tdstPath = "";')
-ln("\t\t\tdstSubfolderSpec = 16;")
-ln("\t\t\tfiles = (")
-ln(f"\t\t\t\t{BF_EMB} /* CardiacMoodWatch.app in Embed Watch Content */,")
-ln("\t\t\t);")
-ln('\t\t\tname = "Embed Watch Content";')
-ln("\t\t\trunOnlyForDeploymentPostprocessing = 0;")
-ln("\t\t};")
-ln("/* End PBXCopyFilesBuildPhase section */")
-ln("")
+if EMBED_WATCH_IN_IOS_APP:
+    ln("/* Begin PBXCopyFilesBuildPhase section */")
+    ln(f"\t\t{EMB_PHASE} /* Embed Watch Content */ = {{")
+    ln("\t\t\tisa = PBXCopyFilesBuildPhase;")
+    ln("\t\t\tbuildActionMask = 2147483647;")
+    ln('\t\t\tdstPath = "";')
+    ln("\t\t\tdstSubfolderSpec = 16;")
+    ln("\t\t\tfiles = (")
+    ln(f"\t\t\t\t{BF_EMB} /* CardiacMoodWatch.app in Embed Watch Content */,")
+    ln("\t\t\t);")
+    ln('\t\t\tname = "Embed Watch Content";')
+    ln("\t\t\trunOnlyForDeploymentPostprocessing = 0;")
+    ln("\t\t};")
+    ln("/* End PBXCopyFilesBuildPhase section */")
+    ln("")
 
 ln("/* Begin PBXFileReference section */")
 ln(f"\t\t{IOS_APP_R} /* CardiacMood.app */ = {{isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CardiacMood.app; sourceTree = BUILT_PRODUCTS_DIR; }};")
@@ -192,11 +201,13 @@ ln("\t\t\tbuildPhases = (")
 ln(f"\t\t\t\t{IOS_SRC} /* Sources */,")
 ln(f"\t\t\t\t{IOS_FW} /* Frameworks */,")
 ln(f"\t\t\t\t{IOS_RES} /* Resources */,")
-ln(f"\t\t\t\t{EMB_PHASE} /* Embed Watch Content */,")
+if EMBED_WATCH_IN_IOS_APP:
+    ln(f"\t\t\t\t{EMB_PHASE} /* Embed Watch Content */,")
 ln("\t\t\t);")
 ln("\t\t\tbuildRules = ( );")
 ln("\t\t\tdependencies = (")
-ln(f"\t\t\t\t{TGT_DEP} /* PBXTargetDependency */,")
+if EMBED_WATCH_IN_IOS_APP:
+    ln(f"\t\t\t\t{TGT_DEP} /* PBXTargetDependency */,")
 ln("\t\t\t);")
 ln('\t\t\tname = CardiacMood;')
 ln('\t\t\tproductName = CardiacMood;')
@@ -217,7 +228,7 @@ ln("\t\t\tdependencies = ( );")
 ln('\t\t\tname = CardiacMoodWatch;')
 ln('\t\t\tproductName = CardiacMoodWatch;')
 ln(f"\t\t\tproductReference = {WATCH_APP_R} /* CardiacMoodWatch.app */;")
-ln('\t\t\tproductType = "com.apple.product-type.application.watchapp2";')
+ln('\t\t\tproductType = "com.apple.product-type.application";')
 ln("\t\t};")
 ln("/* End PBXNativeTarget section */")
 ln("")
@@ -229,8 +240,12 @@ ln("\t\t\tattributes = {")
 ln("\t\t\t\tBuildIndependentTargetsInParallel = 1;")
 ln("\t\t\t\tLastSwiftUpdateCheck = 1520; LastUpgradeCheck = 1520;")
 ln("\t\t\t\tTargetAttributes = {")
-ln(f"\t\t\t\t\t{TARGET_IOS} = {{ CreatedOnToolsVersion = 15.2; }};")
-ln(f"\t\t\t\t\t{TARGET_WATCH} = {{ CreatedOnToolsVersion = 15.2; }};")
+ln(
+    f"\t\t\t\t\t{TARGET_IOS} = {{ CreatedOnToolsVersion = 15.2; DevelopmentTeam = {DEV_TEAM}; ProvisioningStyle = Automatic; }};"
+)
+ln(
+    f"\t\t\t\t\t{TARGET_WATCH} = {{ CreatedOnToolsVersion = 15.2; DevelopmentTeam = {DEV_TEAM}; ProvisioningStyle = Automatic; }};"
+)
 ln("\t\t\t\t};")
 ln("\t\t\t};")
 ln(f'\t\t\tbuildConfigurationList = {LIST_P} /* Build configuration list for PBXProject "CardiacMood" */;')
@@ -268,18 +283,19 @@ ln("\t\t\t); runOnlyForDeploymentPostprocessing = 0; };")
 ln("/* End PBXSourcesBuildPhase section */")
 ln("")
 
-ln("/* Begin PBXTargetDependency section */")
-ln(f"\t\t{TGT_DEP} /* PBXTargetDependency */ = {{ isa = PBXTargetDependency; target = {TARGET_WATCH} /* CardiacMoodWatch */; targetProxy = {PROXY}; }};")
-ln("/* End PBXTargetDependency section */")
-ln("")
+if EMBED_WATCH_IN_IOS_APP:
+    ln("/* Begin PBXTargetDependency section */")
+    ln(f"\t\t{TGT_DEP} /* PBXTargetDependency */ = {{ isa = PBXTargetDependency; target = {TARGET_WATCH} /* CardiacMoodWatch */; targetProxy = {PROXY}; }};")
+    ln("/* End PBXTargetDependency section */")
+    ln("")
 
-ln("/* Begin PBXContainerItemProxy section */")
-ln(f"\t\t{PROXY} /* PBXContainerItemProxy */ = {{")
-ln(f"\t\t\tisa = PBXContainerItemProxy; containerPortal = {PJ} /* Project object */; proxyType = 1;")
-ln(f"\t\t\tremoteGlobalIDString = {TARGET_WATCH}; remoteInfo = CardiacMoodWatch;")
-ln("\t\t};")
-ln("/* End PBXContainerItemProxy section */")
-ln("")
+    ln("/* Begin PBXContainerItemProxy section */")
+    ln(f"\t\t{PROXY} /* PBXContainerItemProxy */ = {{")
+    ln(f"\t\t\tisa = PBXContainerItemProxy; containerPortal = {PJ} /* Project object */; proxyType = 1;")
+    ln(f"\t\t\tremoteGlobalIDString = {TARGET_WATCH}; remoteInfo = CardiacMoodWatch;")
+    ln("\t\t};")
+    ln("/* End PBXContainerItemProxy section */")
+    ln("")
 
 SHARED_DEBUG = """\t\t\t\tALWAYS_SEARCH_USER_PATHS = NO;
 \t\t\t\tCLANG_ANALYZER_NONNULL = YES;
@@ -309,9 +325,9 @@ SHARED_REL = """\t\t\t\tALWAYS_SEARCH_USER_PATHS = NO;
 \t\t\t\tIPHONEOS_DEPLOYMENT_TARGET = 17.0;
 \t\t\t\tWATCHOS_DEPLOYMENT_TARGET = 10.0;"""
 
-IOS_SETTINGS = """CODE_SIGN_STYLE = Automatic;
+IOS_SETTINGS = f"""CODE_SIGN_STYLE = Automatic;
 CURRENT_PROJECT_VERSION = 1;
-DEVELOPMENT_TEAM = "";
+DEVELOPMENT_TEAM = {DEV_TEAM};
 GENERATE_INFOPLIST_FILE = YES;
 INFOPLIST_KEY_CFBundleDisplayName = "Cardiac Mood";
 INFOPLIST_KEY_NSHealthShareUsageDescription = "Reads resting heart rate to compare BPM windows against your baseline for the demo lamp";
@@ -322,6 +338,10 @@ INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationP
 MARKETING_VERSION = 1.0;
 PRODUCT_BUNDLE_IDENTIFIER = com.cardiacmood.CardiacMood;
 PRODUCT_NAME = "$(TARGET_NAME)";
+SDKROOT = iphoneos;
+SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+SUPPORTS_MACCATALYST = NO;
+SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 TARGETED_DEVICE_FAMILY = "1,2";
 SWIFT_EMIT_LOC_STRINGS = YES;
 CODE_SIGN_ENTITLEMENTS = CardiacMood/CardiacMood.entitlements;
@@ -330,9 +350,9 @@ LD_RUNPATH_SEARCH_PATHS = (
 					"@executable_path/Frameworks",
 				);"""
 
-WATCH_SETTINGS = """CODE_SIGN_STYLE = Automatic;
+WATCH_SETTINGS = f"""CODE_SIGN_STYLE = Automatic;
 CURRENT_PROJECT_VERSION = 1;
-DEVELOPMENT_TEAM = "";
+DEVELOPMENT_TEAM = {DEV_TEAM};
 GENERATE_INFOPLIST_FILE = YES;
 INFOPLIST_KEY_CFBundleDisplayName = "Cardiac Mood";
 INFOPLIST_KEY_NSHealthShareUsageDescription = "Reads heart rate while a workout session collects samples for the lamp demo";
@@ -343,6 +363,7 @@ MARKETING_VERSION = 1.0;
 PRODUCT_BUNDLE_IDENTIFIER = com.cardiacmood.CardiacMood.watchkitapp;
 PRODUCT_NAME = "$(TARGET_NAME)";
 SDKROOT = watchos;
+SUPPORTED_PLATFORMS = "watchos watchsimulator";
 SKIP_INSTALL = YES;
 SWIFT_EMIT_LOC_STRINGS = YES;
 TARGETED_DEVICE_FAMILY = 4;

@@ -1,62 +1,72 @@
 // !$*UTF8*$!
 {
 	archiveVersion = 1;
-	classes = {};
+	classes = {
+	};
 	objectVersion = 56;
 	objects = {
 
 /* Begin PBXBuildFile section */
-		C37A405CF4AB4A23A12E2136 /* CardiacMoodApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0689B19CF1824D64826F89AB /* CardiacMoodApp.swift */; };
-		C8E7C743104C4A459CB78048 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1AFF07C53A74B699648E615 /* ContentView.swift */; };
-		A8651E5925914BDEADF4BADB /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B3CE7D4AA0C4CAF825A7B23 /* Config.swift */; };
-		9FCD20296CC2445490963844 /* CardiacAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6EE2FF7881C43F086DD0C7C /* CardiacAPIClient.swift */; };
 		0747516E73F648A98E3DB71B /* HealthBaselineReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10FB14D283C14D7F91DFD292 /* HealthBaselineReader.swift */; };
-		C766C3D07A5E44549E84E30C /* MoodHub.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D59F4FAFB1449F5944161DF /* MoodHub.swift */; };
-		3FC4E7DBFF7E40F9B2BDB5C3 /* CardiacMoodWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DA2B632342B4AB1BF55B0CF /* CardiacMoodWatchApp.swift */; };
 		3F567F5260CF4345AFCC7015 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B44497382F64D64AC8B44F7 /* ContentView.swift */; };
-		A46AC0CF9751424DA765E917 /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B36EE0596F64430AFCE011E /* Config.swift */; };
+		3FC4E7DBFF7E40F9B2BDB5C3 /* CardiacMoodWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DA2B632342B4AB1BF55B0CF /* CardiacMoodWatchApp.swift */; };
 		4DCDA49D701246F6ABAFA4E9 /* WatchConnectivitySender.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9A02F1C3E1C4737AA88901A /* WatchConnectivitySender.swift */; };
+		9FCD20296CC2445490963844 /* CardiacAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6EE2FF7881C43F086DD0C7C /* CardiacAPIClient.swift */; };
+		A46AC0CF9751424DA765E917 /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B36EE0596F64430AFCE011E /* Config.swift */; };
+		A8651E5925914BDEADF4BADB /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B3CE7D4AA0C4CAF825A7B23 /* Config.swift */; };
 		C339FA774E5F4E44A1FABEB2 /* WorkoutHeartBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F812F49CF634DDAABE5AE45 /* WorkoutHeartBuffer.swift */; };
-		4FB2DFA49F0040CAA8E816E4 /* CardiacMoodWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 58A542D137484F38A56C2EE5 /* CardiacMoodWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		C37A405CF4AB4A23A12E2136 /* CardiacMoodApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0689B19CF1824D64826F89AB /* CardiacMoodApp.swift */; };
+		C766C3D07A5E44549E84E30C /* MoodHub.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D59F4FAFB1449F5944161DF /* MoodHub.swift */; };
+		C8E7C743104C4A459CB78048 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1AFF07C53A74B699648E615 /* ContentView.swift */; };
 /* End PBXBuildFile section */
 
-/* Begin PBXCopyFilesBuildPhase section */
-		B0B4D27F3CD842E2AF7D422A /* Embed Watch Content */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 16;
-			files = (
-				4FB2DFA49F0040CAA8E816E4 /* CardiacMoodWatch.app in Embed Watch Content */,
-			);
-			name = "Embed Watch Content";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXCopyFilesBuildPhase section */
-
 /* Begin PBXFileReference section */
-		835C23EDEC7B45F1AF4BDD8E /* CardiacMood.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CardiacMood.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		58A542D137484F38A56C2EE5 /* CardiacMoodWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CardiacMoodWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		0689B19CF1824D64826F89AB /* CardiacMoodApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardiacMoodApp.swift; sourceTree = "<group>"; };
-		B1AFF07C53A74B699648E615 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		0B3CE7D4AA0C4CAF825A7B23 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
-		D6EE2FF7881C43F086DD0C7C /* CardiacAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardiacAPIClient.swift; sourceTree = "<group>"; };
 		10FB14D283C14D7F91DFD292 /* HealthBaselineReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthBaselineReader.swift; sourceTree = "<group>"; };
-		5D59F4FAFB1449F5944161DF /* MoodHub.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoodHub.swift; sourceTree = "<group>"; };
-		896A306E52364B84974AE354 /* CardiacMood.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CardiacMood.entitlements; sourceTree = "<group>"; };
-		3DA2B632342B4AB1BF55B0CF /* CardiacMoodWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardiacMoodWatchApp.swift; sourceTree = "<group>"; };
 		1B44497382F64D64AC8B44F7 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		3B36EE0596F64430AFCE011E /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
-		D9A02F1C3E1C4737AA88901A /* WatchConnectivitySender.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchConnectivitySender.swift; sourceTree = "<group>"; };
+		3DA2B632342B4AB1BF55B0CF /* CardiacMoodWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardiacMoodWatchApp.swift; sourceTree = "<group>"; };
+		58A542D137484F38A56C2EE5 /* CardiacMoodWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CardiacMoodWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		5D59F4FAFB1449F5944161DF /* MoodHub.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoodHub.swift; sourceTree = "<group>"; };
 		5F812F49CF634DDAABE5AE45 /* WorkoutHeartBuffer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutHeartBuffer.swift; sourceTree = "<group>"; };
+		835C23EDEC7B45F1AF4BDD8E /* CardiacMood.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CardiacMood.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		896A306E52364B84974AE354 /* CardiacMood.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CardiacMood.entitlements; sourceTree = "<group>"; };
+		B1AFF07C53A74B699648E615 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		D6EE2FF7881C43F086DD0C7C /* CardiacAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardiacAPIClient.swift; sourceTree = "<group>"; };
+		D9A02F1C3E1C4737AA88901A /* WatchConnectivitySender.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchConnectivitySender.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		56EE9705017C4835A3185BD7 /* Frameworks */ = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = ( ); runOnlyForDeploymentPostprocessing = 0; };
-		449B156792FD4E39924D671C /* Frameworks */ = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = ( ); runOnlyForDeploymentPostprocessing = 0; };
+		449B156792FD4E39924D671C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		56EE9705017C4835A3185BD7 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		15323589F80940E895535099 /* CardiacMoodWatch */ = {
+			isa = PBXGroup;
+			children = (
+				3DA2B632342B4AB1BF55B0CF /* CardiacMoodWatchApp.swift */,
+				1B44497382F64D64AC8B44F7 /* ContentView.swift */,
+				3B36EE0596F64430AFCE011E /* Config.swift */,
+				D9A02F1C3E1C4737AA88901A /* WatchConnectivitySender.swift */,
+				5F812F49CF634DDAABE5AE45 /* WorkoutHeartBuffer.swift */,
+			);
+			path = CardiacMoodWatch;
+			sourceTree = "<group>";
+		};
 		2F8A2F14A112429BB411E1F9 = {
 			isa = PBXGroup;
 			children = (
@@ -64,6 +74,15 @@
 				15323589F80940E895535099 /* CardiacMoodWatch */,
 				3356F9CECD544DB19B4129E2 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		3356F9CECD544DB19B4129E2 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				835C23EDEC7B45F1AF4BDD8E /* CardiacMood.app */,
+				58A542D137484F38A56C2EE5 /* CardiacMoodWatch.app */,
+			);
+			name = Products;
 			sourceTree = "<group>";
 		};
 		AE4553B75BCA43D9B933DDBC /* CardiacMood */ = {
@@ -80,48 +99,9 @@
 			path = CardiacMood;
 			sourceTree = "<group>";
 		};
-		15323589F80940E895535099 /* CardiacMoodWatch */ = {
-			isa = PBXGroup;
-			children = (
-				3DA2B632342B4AB1BF55B0CF /* CardiacMoodWatchApp.swift */,
-				1B44497382F64D64AC8B44F7 /* ContentView.swift */,
-				3B36EE0596F64430AFCE011E /* Config.swift */,
-				D9A02F1C3E1C4737AA88901A /* WatchConnectivitySender.swift */,
-				5F812F49CF634DDAABE5AE45 /* WorkoutHeartBuffer.swift */,
-			);
-			path = CardiacMoodWatch;
-			sourceTree = "<group>";
-		};
-		3356F9CECD544DB19B4129E2 /* Products */ = {
-			isa = PBXGroup;
-			children = (
-				835C23EDEC7B45F1AF4BDD8E /* CardiacMood.app */,
-				58A542D137484F38A56C2EE5 /* CardiacMoodWatch.app */,
-			);
-			name = Products;
-			sourceTree = "<group>";
-		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		AD6290A2B1DF4C6794B86005 /* CardiacMood */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 2C1A1B71AFDA4C76BBE27D43 /* Build configuration list for PBXNativeTarget "CardiacMood" */;
-			buildPhases = (
-				61D296D253674970BFBBF0A9 /* Sources */,
-				56EE9705017C4835A3185BD7 /* Frameworks */,
-				164BC9203B844805958D5F3E /* Resources */,
-				B0B4D27F3CD842E2AF7D422A /* Embed Watch Content */,
-			);
-			buildRules = ( );
-			dependencies = (
-				979E70E92D3F4407B7A5931D /* PBXTargetDependency */,
-			);
-			name = CardiacMood;
-			productName = CardiacMood;
-			productReference = 835C23EDEC7B45F1AF4BDD8E /* CardiacMood.app */;
-			productType = "com.apple.product-type.application";
-		};
 		5C1559F0FDCE4497A41D2851 /* CardiacMoodWatch */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 829B437550684F108715A653 /* Build configuration list for PBXNativeTarget "CardiacMoodWatch" */;
@@ -130,12 +110,31 @@
 				449B156792FD4E39924D671C /* Frameworks */,
 				FAE041C2722F41DDABDC28AD /* Resources */,
 			);
-			buildRules = ( );
-			dependencies = ( );
+			buildRules = (
+			);
+			dependencies = (
+			);
 			name = CardiacMoodWatch;
 			productName = CardiacMoodWatch;
 			productReference = 58A542D137484F38A56C2EE5 /* CardiacMoodWatch.app */;
-			productType = "com.apple.product-type.application.watchapp2";
+			productType = "com.apple.product-type.application";
+		};
+		AD6290A2B1DF4C6794B86005 /* CardiacMood */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2C1A1B71AFDA4C76BBE27D43 /* Build configuration list for PBXNativeTarget "CardiacMood" */;
+			buildPhases = (
+				61D296D253674970BFBBF0A9 /* Sources */,
+				56EE9705017C4835A3185BD7 /* Frameworks */,
+				164BC9203B844805958D5F3E /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = CardiacMood;
+			productName = CardiacMood;
+			productReference = 835C23EDEC7B45F1AF4BDD8E /* CardiacMood.app */;
+			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
 
@@ -144,18 +143,33 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 1520; LastUpgradeCheck = 1520;
+				LastSwiftUpdateCheck = 1520;
+				LastUpgradeCheck = 1620;
 				TargetAttributes = {
-					AD6290A2B1DF4C6794B86005 = { CreatedOnToolsVersion = 15.2; };
-					5C1559F0FDCE4497A41D2851 = { CreatedOnToolsVersion = 15.2; };
+					5C1559F0FDCE4497A41D2851 = {
+						CreatedOnToolsVersion = 15.2;
+						DevelopmentTeam = 877MZL68G8;
+						ProvisioningStyle = Automatic;
+					};
+					AD6290A2B1DF4C6794B86005 = {
+						CreatedOnToolsVersion = 15.2;
+						DevelopmentTeam = 877MZL68G8;
+						ProvisioningStyle = Automatic;
+					};
 				};
 			};
 			buildConfigurationList = 7013CF21CBF74BDC811A45FC /* Build configuration list for PBXProject "CardiacMood" */;
-			compatibilityVersion = "Xcode 14.0"; developmentRegion = en;
-			hasScannedForEncodings = 0; knownRegions = ( en, Base );
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
 			mainGroup = 2F8A2F14A112429BB411E1F9;
 			productRefGroup = 3356F9CECD544DB19B4129E2 /* Products */;
-			projectDirPath = ""; projectRoot = "";
+			projectDirPath = "";
+			projectRoot = "";
 			targets = (
 				AD6290A2B1DF4C6794B86005 /* CardiacMood */,
 				5C1559F0FDCE4497A41D2851 /* CardiacMoodWatch */,
@@ -164,180 +178,301 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		164BC9203B844805958D5F3E /* Resources */ = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = ( ); runOnlyForDeploymentPostprocessing = 0; };
-		FAE041C2722F41DDABDC28AD /* Resources */ = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = ( ); runOnlyForDeploymentPostprocessing = 0; };
+		164BC9203B844805958D5F3E /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FAE041C2722F41DDABDC28AD /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		3E4214F1662F4073B49EBEC0 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3FC4E7DBFF7E40F9B2BDB5C3 /* CardiacMoodWatchApp.swift in Sources */,
+				3F567F5260CF4345AFCC7015 /* ContentView.swift in Sources */,
+				A46AC0CF9751424DA765E917 /* Config.swift in Sources */,
+				4DCDA49D701246F6ABAFA4E9 /* WatchConnectivitySender.swift in Sources */,
+				C339FA774E5F4E44A1FABEB2 /* WorkoutHeartBuffer.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		61D296D253674970BFBBF0A9 /* Sources */ = {
-			isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 				C37A405CF4AB4A23A12E2136 /* CardiacMoodApp.swift in Sources */,
 				C8E7C743104C4A459CB78048 /* ContentView.swift in Sources */,
 				A8651E5925914BDEADF4BADB /* Config.swift in Sources */,
 				9FCD20296CC2445490963844 /* CardiacAPIClient.swift in Sources */,
 				0747516E73F648A98E3DB71B /* HealthBaselineReader.swift in Sources */,
 				C766C3D07A5E44549E84E30C /* MoodHub.swift in Sources */,
-			); runOnlyForDeploymentPostprocessing = 0; };
-		3E4214F1662F4073B49EBEC0 /* Sources */ = {
-			isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (
-				3FC4E7DBFF7E40F9B2BDB5C3 /* CardiacMoodWatchApp.swift in Sources */,
-				3F567F5260CF4345AFCC7015 /* ContentView.swift in Sources */,
-				A46AC0CF9751424DA765E917 /* Config.swift in Sources */,
-				4DCDA49D701246F6ABAFA4E9 /* WatchConnectivitySender.swift in Sources */,
-				C339FA774E5F4E44A1FABEB2 /* WorkoutHeartBuffer.swift in Sources */,
-			); runOnlyForDeploymentPostprocessing = 0; };
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
-/* Begin PBXTargetDependency section */
-		979E70E92D3F4407B7A5931D /* PBXTargetDependency */ = { isa = PBXTargetDependency; target = 5C1559F0FDCE4497A41D2851 /* CardiacMoodWatch */; targetProxy = 3EABEB9ABC424DE38563EA55; };
-/* End PBXTargetDependency section */
-
-/* Begin PBXContainerItemProxy section */
-		3EABEB9ABC424DE38563EA55 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy; containerPortal = CADAA52C0EAD464D9EF49A7B /* Project object */; proxyType = 1;
-			remoteGlobalIDString = 5C1559F0FDCE4497A41D2851; remoteInfo = CardiacMoodWatch;
-		};
-/* End PBXContainerItemProxy section */
-
 /* Begin XCBuildConfiguration section */
-		B7B9AC3855294263980C59C6 /* Debug */ = {
-			isa = XCBuildConfiguration; buildSettings = {
-				ALWAYS_SEARCH_USER_PATHS = NO;
-				CLANG_ANALYZER_NONNULL = YES;
-				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_ARC = YES;
-				COPY_PHASE_STRIP = NO;
-				DEBUG_INFORMATION_FORMAT = dwarf;
-				GCC_DYNAMIC_NO_PIC = NO;
-				GCC_OPTIMIZATION_LEVEL = 0;
-				GCC_PREPROCESSOR_DEFINITIONS = ( "DEBUG=1", "$(inherited)" );
+		37D082D657D94F64AD40A3BE /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				"ARCHS[sdk=watchos*]" = arm64;
+				"ARCHS[sdk=watchsimulator*]" = arm64;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 877MZL68G8;
+				"EXCLUDED_ARCHS[sdk=watchsimulator*]" = "i386 x86_64";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Cardiac Mood";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Reads heart rate while a workout session collects samples for the lamp demo";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.cardiacmood.CardiacMood;
+				INFOPLIST_KEY_WKRunsIndependentlyCompanionApp = NO;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
 				ONLY_ACTIVE_ARCH = YES;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				SWIFT_VERSION = 5.0;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				WATCHOS_DEPLOYMENT_TARGET = 10.0;
-			}; name = Debug; };
-		FBBA24BCDB5644759E3F497A /* Release */ = {
-			isa = XCBuildConfiguration; buildSettings = {
-				ALWAYS_SEARCH_USER_PATHS = NO;
-				CLANG_ANALYZER_NONNULL = YES;
-				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_ARC = YES;
-				COPY_PHASE_STRIP = NO;
-				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				ENABLE_NS_ASSERTIONS = NO;
-				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_VERSION = 5.0;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				WATCHOS_DEPLOYMENT_TARGET = 10.0;
-			}; name = Release; };
-		A2A99A530A6B433294C973FB /* Debug */ = {
-			isa = XCBuildConfiguration; buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "Cardiac Mood";
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "Reads resting heart rate to compare BPM windows against your baseline for the demo lamp";
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.cardiacmood.CardiacMood;
+				PRODUCT_BUNDLE_IDENTIFIER = com.cardiacmood.CardiacMood.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				TARGETED_DEVICE_FAMILY = "1,2";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				CODE_SIGN_ENTITLEMENTS = CardiacMood/CardiacMood.entitlements;
-				LD_RUNPATH_SEARCH_PATHS = (
-									"$(inherited)",
-									"@executable_path/Frameworks",
-								);
-			};
-			name = Debug;
-		};
-		C3D31C5EFB4347F3BD7EAC5B /* Release */ = {
-			isa = XCBuildConfiguration; buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "Cardiac Mood";
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "Reads resting heart rate to compare BPM windows against your baseline for the demo lamp";
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.cardiacmood.CardiacMood;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				TARGETED_DEVICE_FAMILY = "1,2";
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				CODE_SIGN_ENTITLEMENTS = CardiacMood/CardiacMood.entitlements;
-				LD_RUNPATH_SEARCH_PATHS = (
-									"$(inherited)",
-									"@executable_path/Frameworks",
-								);
+				TARGETED_DEVICE_FAMILY = 4;
 			};
 			name = Release;
 		};
 		5110C7CFCB2B4681831CB0D8 /* Debug */ = {
-			isa = XCBuildConfiguration; buildSettings = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				"ARCHS[sdk=watchos*]" = arm64;
+				"ARCHS[sdk=watchsimulator*]" = arm64;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 877MZL68G8;
+				"EXCLUDED_ARCHS[sdk=watchsimulator*]" = "i386 x86_64";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Cardiac Mood";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Reads heart rate while a workout session collects samples for the lamp demo";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.cardiacmood.CardiacMood;
 				INFOPLIST_KEY_WKRunsIndependentlyCompanionApp = NO;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
 				MARKETING_VERSION = 1.0;
+				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = com.cardiacmood.CardiacMood.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				TARGETED_DEVICE_FAMILY = 4;
-				LD_RUNPATH_SEARCH_PATHS = (
-									"$(inherited)",
-									"@executable_path/Frameworks",
-								);
 			};
 			name = Debug;
 		};
-		37D082D657D94F64AD40A3BE /* Release */ = {
-			isa = XCBuildConfiguration; buildSettings = {
+		A2A99A530A6B433294C973FB /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = CardiacMood/CardiacMood.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 877MZL68G8;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Cardiac Mood";
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "Reads heart rate while a workout session collects samples for the lamp demo";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
-				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.cardiacmood.CardiacMood;
-				INFOPLIST_KEY_WKRunsIndependentlyCompanionApp = NO;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.cardiacmood.CardiacMood.watchkitapp;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = watchos;
-				SKIP_INSTALL = YES;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				TARGETED_DEVICE_FAMILY = 4;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Reads resting heart rate to compare BPM windows against your baseline for the demo lamp";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				LD_RUNPATH_SEARCH_PATHS = (
-									"$(inherited)",
-									"@executable_path/Frameworks",
-								);
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.cardiacmood.CardiacMood;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		B7B9AC3855294263980C59C6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Debug;
+		};
+		C3D31C5EFB4347F3BD7EAC5B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = CardiacMood/CardiacMood.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 877MZL68G8;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Cardiac Mood";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Reads resting heart rate to compare BPM windows against your baseline for the demo lamp";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.cardiacmood.CardiacMood;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		FBBA24BCDB5644759E3F497A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_VERSION = 5.0;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
 			};
 			name = Release;
 		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		7013CF21CBF74BDC811A45FC /* project */ = { isa = XCConfigurationList; buildConfigurations = ( B7B9AC3855294263980C59C6 /* Debug */, FBBA24BCDB5644759E3F497A /* Release */ ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
-		2C1A1B71AFDA4C76BBE27D43 /* ios */ = { isa = XCConfigurationList; buildConfigurations = ( A2A99A530A6B433294C973FB /* Debug */, C3D31C5EFB4347F3BD7EAC5B /* Release */ ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
-		829B437550684F108715A653 /* watch */ = { isa = XCConfigurationList; buildConfigurations = ( 5110C7CFCB2B4681831CB0D8 /* Debug */, 37D082D657D94F64AD40A3BE /* Release */ ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		2C1A1B71AFDA4C76BBE27D43 /* Build configuration list for PBXNativeTarget "CardiacMood" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A2A99A530A6B433294C973FB /* Debug */,
+				C3D31C5EFB4347F3BD7EAC5B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		7013CF21CBF74BDC811A45FC /* Build configuration list for PBXProject "CardiacMood" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B7B9AC3855294263980C59C6 /* Debug */,
+				FBBA24BCDB5644759E3F497A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		829B437550684F108715A653 /* Build configuration list for PBXNativeTarget "CardiacMoodWatch" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5110C7CFCB2B4681831CB0D8 /* Debug */,
+				37D082D657D94F64AD40A3BE /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 	};
 	rootObject = CADAA52C0EAD464D9EF49A7B /* Project object */;

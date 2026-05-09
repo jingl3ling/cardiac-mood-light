@@ -46,7 +46,11 @@ uvicorn cardiac_mood.main:app --host 0.0.0.0 --port 8080
 
 ## iOS + watchOS
 
-Open `ios/CardiacMood.xcodeproj` in Xcode. Set your **team**, **bundle IDs** if needed, and edit `Config.swift` in both the iOS and Watch targets (`baseURL`, `apiKey`, `deviceId`).
+Open `ios/CardiacMood.xcodeproj` in Xcode. Use the shared scheme **CardiacMood** (not a Mac-only target). Set your **team**, **bundle IDs** if needed, and edit `Config.swift` in both the iOS and Watch targets (`baseURL`, `apiKey`, `deviceId`).
+
+If the run destination menu only showed **My Mac**, the iOS app target was missing an explicit iPhone SDK — that is fixed in the project (`SDKROOT = iphoneos`, no macOS code-signing on the iPhone app). You should see your **iPhone** and **iOS Simulator** in the device list.
+
+**Signing:** The iOS app uses the **HealthKit** capability and must use a **development / distribution certificate** with **Automatically manage signing** enabled. The **Watch** target uses the same **Team** as the iPhone app (required for embedded watchOS apps). If Xcode warns about entitlements, open the **CardiacMood** target → **Signing & Capabilities**, choose your **Team**, and ensure the **CardiacMoodWatch** target has the same team. To change the checked-in team ID, edit `DEVELOPMENT_TEAM` in the Xcode project or set `DEV_TEAM` in [`ios/generate_project.py`](ios/generate_project.py) before regenerating.
 
 The Xcode project file is generated from `uids.txt` for stable 24-hex IDs. Regenerate with:
 

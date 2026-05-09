@@ -14,6 +14,8 @@ final class MoodHub: NSObject, ObservableObject {
   @Published var isSending = false
   @Published var lastError = ""
   @Published var watchSessionActive = false
+  /// Mirrors server brightness for the lamp slider (0…255).
+  @Published var lampBrightness: Double = 180
 
   private let baseline = HealthBaselineReader()
   private let api = CardiacAPIClient()
@@ -87,11 +89,36 @@ final class MoodHub: NSObject, ObservableObject {
 
     do {
       let resp = try await api.analyze(deviceId: Config.deviceId, restingBpm: resting, samples: samples)
-      lastMood = resp.mood
-      lastLabel = resp.label ?? resp.mood
-      lastColorHex = resp.color
-      lastReason = resp.reason ?? ""
-      lastUpdatedText = DateFormatter.localizedString(from: Date(), dateStyle: .none, timeStyle: .medium)
+      applyAnalyzeResponse(resp)
+    } catch {
+      lastError = String(describing: error)
+    }
+  }
+
+  func applyAnalyzeResponse(_ resp: AnalyzeResponseBody) {
+    lastMood = resp.mood
+    lastLabel = resp.label ?? resp.mood
+    lastColorHex = resp.color
+    lastReason = resp.reason ?? ""
+    lampBrightness = Double(resp.brightness)
+    lastUpdatedText = DateFormatter.localizedString(from: Date(), dateStyle: .none, timeStyle: .medium)
+  }
+
+  /// Push lamp color/brightness to the server; ESP32 picks it up on the next `/v1/cardiac/latest` poll.
+  func pushManualLamp(mood: String, brightness: Int, colorHexOverride: String?) async {
+    lastError = ""
+    isSending = true
+    defer { isSending = false }
+
+    let b = min(255, max(0, brightness))
+    do {
+      let resp = try await api.manualLamp(
+        deviceId: Config.deviceId,
+        mood: mood,
+        brightness: b,
+        colorHex: colorHexOverride
+      )
+      applyAnalyzeResponse(resp)
     } catch {
       lastError = String(describing: error)
     }

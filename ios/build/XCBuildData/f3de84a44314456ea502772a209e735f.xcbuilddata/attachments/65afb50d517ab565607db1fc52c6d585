@@ -1,0 +1,58 @@
+{
+  "" : {
+    "diagnostics" : "/Users/njit/Documents/personal/cardiac-mood-light/ios/build/CardiacMood.build/Debug-watchos/CardiacMoodWatch.build/Objects-normal/arm64/CardiacMoodWatch-master.dia",
+    "emit-module-dependencies" : "/Users/njit/Documents/personal/cardiac-mood-light/ios/build/CardiacMood.build/Debug-watchos/CardiacMoodWatch.build/Objects-normal/arm64/CardiacMoodWatch-master-emit-module.d",
+    "emit-module-diagnostics" : "/Users/njit/Documents/personal/cardiac-mood-light/ios/build/CardiacMood.build/Debug-watchos/CardiacMoodWatch.build/Objects-normal/arm64/CardiacMoodWatch-master-emit-module.dia",
+    "swift-dependencies" : "/Users/njit/Documents/personal/cardiac-mood-light/ios/build/CardiacMood.build/Debug-watchos/CardiacMoodWatch.build/Objects-normal/arm64/CardiacMoodWatch-master.swiftdeps"
+  },
+  "/Users/njit/Documents/personal/cardiac-mood-light/ios/CardiacMoodWatch/CardiacMoodWatchApp.swift" : {
+    "const-values" : "/Users/njit/Documents/personal/cardiac-mood-light/ios/build/CardiacMood.build/Debug-watchos/CardiacMoodWatch.build/Objects-normal/arm64/CardiacMoodWatchApp.swiftconstvalues",
+    "dependencies" : "/Users/njit/Documents/personal/cardiac-mood-light/ios/build/CardiacMood.build/Debug-watchos/CardiacMoodWatch.build/Objects-normal/arm64/CardiacMoodWatchApp.d",
+    "diagnostics" : "/Users/njit/Documents/personal/cardiac-mood-light/ios/build/CardiacMood.build/Debug-watchos/CardiacMoodWatch.build/Objects-normal/arm64/CardiacMoodWatchApp.dia",
+    "index-unit-output-path" : "/CardiacMood.build/Debug-watchos/CardiacMoodWatch.build/Objects-normal/arm64/CardiacMoodWatchApp.o",
+    "llvm-bc" : "/Users/njit/Documents/personal/cardiac-mood-light/ios/build/CardiacMood.build/Debug-watchos/CardiacMoodWatch.build/Objects-normal/arm64/CardiacMoodWatchApp.bc",
+    "object" : "/Users/njit/Documents/personal/cardiac-mood-light/ios/build/CardiacMood.build/Debug-watchos/CardiacMoodWatch.build/Objects-normal/arm64/CardiacMoodWatchApp.o",
+    "swift-dependencies" : "/Users/njit/Documents/personal/cardiac-mood-light/ios/build/CardiacMood.build/Debug-watchos/CardiacMoodWatch.build/Objects-normal/arm64/CardiacMoodWatchApp.swiftdeps",
+    "swiftmodule" : "/Users/njit/Documents/personal/cardiac-mood-light/ios/build/CardiacMood.build/Debug-watchos/CardiacMoodWatch.build/Objects-normal/arm64/CardiacMoodWatchApp~partial.swiftmodule"
+  },
+  "/Users/njit/Documents/personal/cardiac-mood-light/ios/CardiacMoodWatch/Config.swift" : {
+    "const-values" : "/Users/njit/Documents/personal/cardiac-mood-light/ios/build/CardiacMood.build/Debug-watchos/CardiacMoodWatch.build/Objects-normal/arm64/Config.swiftconstvalues",
+    "dependencies" : "/Users/njit/Documents/personal/cardiac-mood-light/ios/build/CardiacMood.build/Debug-watchos/CardiacMoodWatch.build/Objects-normal/arm64/Config.d",
+    "diagnostics" : "/Users/njit/Documents/personal/cardiac-mood-light/ios/build/CardiacMood.build/Debug-watchos/CardiacMoodWatch.build/Objects-normal/arm64/Config.dia",
+    "index-unit-output-path" : "/CardiacMood.build/Debug-watchos/CardiacMoodWatch.build/Objects-normal/arm64/Config.o",
+    "llvm-bc" : "/Users/njit/Documents/personal/cardiac-mood-light/ios/build/CardiacMood.build/Debug-watchos/CardiacMoodWatch.build/Objects-normal/arm64/Config.bc",
+    "object" : "/Users/njit/Documents/personal/cardiac-mood-light/ios/build/CardiacMood.build/Debug-watchos/CardiacMoodWatch.build/Objects-normal/arm64/Config.o",
+    "swift-dependencies" : "/Users/njit/Documents/personal/cardiac-mood-light/ios/build/CardiacMood.build/Debug-watchos/CardiacMoodWatch.build/Objects-normal/arm64/Config.swiftdeps",
+    "swiftmodule" : "/Users/njit/Documents/personal/cardiac-mood-light/ios/build/CardiacMood.build/Debug-watchos/CardiacMoodWatch.build/Objects-normal/arm64/Config~partial.swiftmodule"
+  },
+  "/Users/njit/Documents/personal/cardiac-mood-light/ios/CardiacMoodWatch/ContentView.swift" : {
+    "const-values" : "/Users/njit/Documents/personal/cardiac-mood-light/ios/build/CardiacMood.build/Debug-watchos/CardiacMoodWatch.build/Objects-normal/arm64/ContentView.swiftconstvalues",
+    "dependencies" : "/Users/njit/Documents/personal/cardiac-mood-light/ios/build/CardiacMood.build/Debug-watchos/CardiacMoodWatch.build/Objects-normal/arm64/ContentView.d",
+    "diagnostics" : "/Users/njit/Documents/personal/cardiac-mood-light/ios/build/CardiacMood.build/Debug-watchos/CardiacMoodWatch.build/Objects-normal/arm64/ContentView.dia",
+    "index-unit-output-path" : "/CardiacMood.build/Debug-watchos/CardiacMoodWatch.build/Objects-normal/arm64/ContentView.o",
+    "llvm-bc" : "/Users/njit/Documents/personal/cardiac-mood-light/ios/build/CardiacMood.build/Debug-watchos/CardiacMoodWatch.build/Objects-normal/arm64/ContentView.bc",
+    "object" : "/Users/njit/Documents/personal/cardiac-mood-light/ios/build/CardiacMood.build/Debug-watchos/CardiacMoodWatch.build/Objects-normal/arm64/ContentView.o",
+    "swift-dependencies" : "/Users/njit/Documents/personal/cardiac-mood-light/ios/build/CardiacMood.build/Debug-watchos/CardiacMoodWatch.build/Objects-normal/arm64/ContentView.swiftdeps",
+    "swiftmodule" : "/Users/njit/Documents/personal/cardiac-mood-light/ios/build/CardiacMood.build/Debug-watchos/CardiacMoodWatch.build/Objects-normal/arm64/ContentView~partial.swiftmodule"
+  },
+  "/Users/njit/Documents/personal/cardiac-mood-light/ios/CardiacMoodWatch/WatchConnectivitySender.swift" : {
+    "const-values" : "/Users/njit/Documents/personal/cardiac-mood-light/ios/build/CardiacMood.build/Debug-watchos/CardiacMoodWatch.build/Objects-normal/arm64/WatchConnectivitySender.swiftconstvalues",
+    "dependencies" : "/Users/njit/Documents/personal/cardiac-mood-light/ios/build/CardiacMood.build/Debug-watchos/CardiacMoodWatch.build/Objects-normal/arm64/WatchConnectivitySender.d",
+    "diagnostics" : "/Users/njit/Documents/personal/cardiac-mood-light/ios/build/CardiacMood.build/Debug-watchos/CardiacMoodWatch.build/Objects-normal/arm64/WatchConnectivitySender.dia",
+    "index-unit-output-path" : "/CardiacMood.build/Debug-watchos/CardiacMoodWatch.build/Objects-normal/arm64/WatchConnectivitySender.o",
+    "llvm-bc" : "/Users/njit/Documents/personal/cardiac-mood-light/ios/build/CardiacMood.build/Debug-watchos/CardiacMoodWatch.build/Objects-normal/arm64/WatchConnectivitySender.bc",
+    "object" : "/Users/njit/Documents/personal/cardiac-mood-light/ios/build/CardiacMood.build/Debug-watchos/CardiacMoodWatch.build/Objects-normal/arm64/WatchConnectivitySender.o",
+    "swift-dependencies" : "/Users/njit/Documents/personal/cardiac-mood-light/ios/build/CardiacMood.build/Debug-watchos/CardiacMoodWatch.build/Objects-normal/arm64/WatchConnectivitySender.swiftdeps",
+    "swiftmodule" : "/Users/njit/Documents/personal/cardiac-mood-light/ios/build/CardiacMood.build/Debug-watchos/CardiacMoodWatch.build/Objects-normal/arm64/WatchConnectivitySender~partial.swiftmodule"
+  },
+  "/Users/njit/Documents/personal/cardiac-mood-light/ios/CardiacMoodWatch/WorkoutHeartBuffer.swift" : {
+    "const-values" : "/Users/njit/Documents/personal/cardiac-mood-light/ios/build/CardiacMood.build/Debug-watchos/CardiacMoodWatch.build/Objects-normal/arm64/WorkoutHeartBuffer.swiftconstvalues",
+    "dependencies" : "/Users/njit/Documents/personal/cardiac-mood-light/ios/build/CardiacMood.build/Debug-watchos/CardiacMoodWatch.build/Objects-normal/arm64/WorkoutHeartBuffer.d",
+    "diagnostics" : "/Users/njit/Documents/personal/cardiac-mood-light/ios/build/CardiacMood.build/Debug-watchos/CardiacMoodWatch.build/Objects-normal/arm64/WorkoutHeartBuffer.dia",
+    "index-unit-output-path" : "/CardiacMood.build/Debug-watchos/CardiacMoodWatch.build/Objects-normal/arm64/WorkoutHeartBuffer.o",
+    "llvm-bc" : "/Users/njit/Documents/personal/cardiac-mood-light/ios/build/CardiacMood.build/Debug-watchos/CardiacMoodWatch.build/Objects-normal/arm64/WorkoutHeartBuffer.bc",
+    "object" : "/Users/njit/Documents/personal/cardiac-mood-light/ios/build/CardiacMood.build/Debug-watchos/CardiacMoodWatch.build/Objects-normal/arm64/WorkoutHeartBuffer.o",
+    "swift-dependencies" : "/Users/njit/Documents/personal/cardiac-mood-light/ios/build/CardiacMood.build/Debug-watchos/CardiacMoodWatch.build/Objects-normal/arm64/WorkoutHeartBuffer.swiftdeps",
+    "swiftmodule" : "/Users/njit/Documents/personal/cardiac-mood-light/ios/build/CardiacMood.build/Debug-watchos/CardiacMoodWatch.build/Objects-normal/arm64/WorkoutHeartBuffer~partial.swiftmodule"
+  }
+}

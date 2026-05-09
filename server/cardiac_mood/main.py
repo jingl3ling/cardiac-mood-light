@@ -59,6 +59,39 @@ class AnalyzeBody(BaseModel):
         return sorted(v, key=lambda s: s.t)
 
 
+class ManualLampBody(BaseModel):
+    """Set lamp color/brightness from the phone; same store as /analyze for ESP32 polling."""
+
+    deviceId: str = Field(..., min_length=1, max_length=128)
+    mood: str = Field(..., description="One of calm|stressed|happy|sad (drives label; color from palette unless overridden)")
+    brightness: int = Field(..., ge=0, le=255)
+    color: str | None = Field(
+        None,
+        description="Optional #RRGGBB; if set, overrides palette color for the device",
+    )
+
+    @field_validator("mood")
+    @classmethod
+    def mood_ok(cls, v: str) -> str:
+        m = v.lower().strip()
+        if m not in MOODS:
+            raise ValueError("mood must be one of calm, stressed, happy, sad")
+        return m
+
+    @field_validator("color")
+    @classmethod
+    def color_ok(cls, v: str | None) -> str | None:
+        if v is None or v == "":
+            return None
+        s = v.strip()
+        if not s.startswith("#") or len(s) != 7:
+            raise ValueError("color must be #RRGGBB")
+        for ch in s[1:]:
+            if ch not in "0123456789abcdefABCDEF":
+                raise ValueError("color must be #RRGGBB")
+        return s
+
+
 def require_api_key(x_api_key: str | None) -> None:
     if not API_KEY:
         return
@@ -141,6 +174,23 @@ def pack_state(device_id: str, mood: str, reason: str, source: str) -> dict[str,
     return state
 
 
+def pack_manual(device_id: str, mood: str, brightness: int, color_override: str | None) -> dict[str, Any]:
+    st = STYLE[mood]
+    color = color_override if color_override else st["color"]
+    state = {
+        "deviceId": device_id,
+        "mood": mood,
+        "label": st["label"],
+        "color": color,
+        "brightness": int(brightness),
+        "reason": "manual_ios",
+        "source": "manual",
+        "updatedAt": time.time(),
+    }
+    _STORE[device_id] = state
+    return state
+
+
 _INDEX_HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -163,6 +213,7 @@ _INDEX_HTML = """<!DOCTYPE html>
     <li><a href="/v1/cardiac/health">Legacy health</a> — <code>GET /v1/cardiac/health</code></li>
     <li><a href="/docs">OpenAPI docs</a> — <code>GET /docs</code></li>
     <li><code>POST /v1/cardiac/analyze</code> — analyze BPM window (requires <code>x-api-key</code> when configured)</li>
+    <li><code>POST /v1/cardiac/manual</code> — set color/brightness from phone (requires <code>x-api-key</code> when configured)</li>
     <li><code>GET /v1/cardiac/latest</code> — latest mood for ESP32 (requires <code>x-api-key</code> when configured)</li>
   </ul>
 </body>
@@ -211,6 +262,26 @@ async def analyze(
         mood, reason = classify_heuristic(bpms, body.restingBpm)
 
     state = pack_state(body.deviceId, mood, reason, source)
+    return {
+        "ok": True,
+        "mood": state["mood"],
+        "label": state["label"],
+        "color": state["color"],
+        "brightness": state["brightness"],
+        "reason": state["reason"],
+        "source": state["source"],
+        "updatedAt": state["updatedAt"],
+    }
+
+
+@app.post("/v1/cardiac/manual")
+async def manual_lamp(
+    body: ManualLampBody,
+    x_api_key: str | None = Header(default=None, alias="x-api-key"),
+) -> dict[str, Any]:
+    """Push lamp state so ESP32 picks it up on the next GET /v1/cardiac/latest poll."""
+    require_api_key(x_api_key)
+    state = pack_manual(body.deviceId, body.mood, body.brightness, body.color)
     return {
         "ok": True,
         "mood": state["mood"],

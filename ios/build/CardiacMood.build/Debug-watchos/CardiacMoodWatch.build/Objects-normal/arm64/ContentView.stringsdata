@@ -1,0 +1,56 @@
+{
+  "source": "/Users/njit/Documents/personal/cardiac-mood-light/ios/CardiacMoodWatch/ContentView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Cardiac Mood",
+        "location": {
+          "startingColumn": 12,
+          "startingLine": 8
+        }
+      },
+      {
+        "comment": "",
+        "key": "— BPM",
+        "location": {
+          "startingColumn": 14,
+          "startingLine": 19
+        }
+      },
+      {
+        "comment": "",
+        "key": "%lld BPM",
+        "location": {
+          "startingColumn": 14,
+          "startingLine": 16
+        }
+      },
+      {
+        "comment": "",
+        "key": "Buffer: %lld/%lld",
+        "location": {
+          "startingColumn": 12,
+          "startingLine": 23
+        }
+      },
+      {
+        "comment": "",
+        "key": "Stop session",
+        "location": {
+          "startingColumn": 16,
+          "startingLine": 28
+        }
+      },
+      {
+        "comment": "",
+        "key": "Start session",
+        "location": {
+          "startingColumn": 16,
+          "startingLine": 33
+        }
+      }
+    ]
+  },
+  "version": 1
+}
