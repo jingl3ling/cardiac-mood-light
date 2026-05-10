@@ -25,6 +25,22 @@ struct AnalyzeResponseBody: Codable {
   let blinkBpm: Double?
 }
 
+struct ExplainMoodRequestBody: Codable {
+  let deviceId: String
+  let mood: String
+  let localDate: String
+  let timeZoneId: String
+  let restingBpm: Double?
+  let recentBpms: [Double]?
+  let classifierReason: String?
+  let analyzeSource: String?
+}
+
+struct ExplainMoodResponseBody: Codable {
+  let ok: Bool?
+  let caption: String
+}
+
 struct ManualLampRequestBody: Codable {
   let deviceId: String
   let mood: String
@@ -34,6 +50,8 @@ struct ManualLampRequestBody: Codable {
   let powerOn: Bool
   let blinkEnabled: Bool
   let blinkBpm: Double
+  /// When set, overrides preset mood label on the server.
+  let moodLabel: String?
 }
 
 enum CardiacAPIError: Error {
@@ -71,7 +89,8 @@ struct CardiacAPIClient {
     colorHex: String?,
     powerOn: Bool,
     blinkEnabled: Bool,
-    blinkBpm: Double
+    blinkBpm: Double,
+    moodLabel: String?
   ) async throws -> AnalyzeResponseBody {
     var req = URLRequest(url: Config.baseURL.appendingPathComponent("/v1/cardiac/manual"))
     req.httpMethod = "POST"
@@ -87,7 +106,8 @@ struct CardiacAPIClient {
       color: colorHex,
       powerOn: powerOn,
       blinkEnabled: blinkEnabled,
-      blinkBpm: bpm
+      blinkBpm: bpm,
+      moodLabel: moodLabel
     )
     req.httpBody = try JSONEncoder().encode(body)
 
@@ -95,5 +115,40 @@ struct CardiacAPIClient {
     guard let http = resp as? HTTPURLResponse else { throw CardiacAPIError.badStatus(-1) }
     guard (200 ... 299).contains(http.statusCode) else { throw CardiacAPIError.badStatus(http.statusCode) }
     return try JSONDecoder().decode(AnalyzeResponseBody.self, from: data)
+  }
+
+  func explainMoodInsight(
+    deviceId: String,
+    mood: String,
+    localDate: String,
+    timeZoneId: String,
+    restingBpm: Double?,
+    recentBpms: [Double]?,
+    classifierReason: String?,
+    analyzeSource: String?
+  ) async throws -> String {
+    var req = URLRequest(url: Config.baseURL.appendingPathComponent("/v1/cardiac/explain-mood"))
+    req.httpMethod = "POST"
+    req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    if !Config.apiKey.isEmpty {
+      req.setValue(Config.apiKey, forHTTPHeaderField: "x-api-key")
+    }
+    let body = ExplainMoodRequestBody(
+      deviceId: deviceId,
+      mood: mood,
+      localDate: localDate,
+      timeZoneId: timeZoneId,
+      restingBpm: restingBpm,
+      recentBpms: recentBpms,
+      classifierReason: classifierReason,
+      analyzeSource: analyzeSource
+    )
+    req.httpBody = try JSONEncoder().encode(body)
+
+    let (data, resp) = try await session.data(for: req)
+    guard let http = resp as? HTTPURLResponse else { throw CardiacAPIError.badStatus(-1) }
+    guard (200 ... 299).contains(http.statusCode) else { throw CardiacAPIError.badStatus(http.statusCode) }
+    let decoded = try JSONDecoder().decode(ExplainMoodResponseBody.self, from: data)
+    return decoded.caption
   }
 }

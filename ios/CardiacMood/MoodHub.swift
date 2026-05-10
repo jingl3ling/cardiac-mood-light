@@ -10,6 +10,8 @@ final class MoodHub: NSObject, ObservableObject {
   @Published var lastLabel = "—"
   @Published var lastColorHex = "#808080"
   @Published var lastReason = ""
+  /// Friendly sentence from `/v1/cardiac/explain-mood` (Claude or server fallback).
+  @Published var moodInsight = ""
   @Published var lastUpdatedText = ""
   @Published var isSending = false
   @Published var lastError = ""
@@ -22,6 +24,15 @@ final class MoodHub: NSObject, ObservableObject {
 
   /// Increments on each manual lamp request so slower responses cannot overwrite newer state.
   private var manualLampGeneration = 0
+  private var moodInsightGeneration = 0
+
+  /// Last watch/analyze window — sent to explain-mood when present (cleared on manual lamp / mood tile pick).
+  private var insightRestingBpm: Double?
+  private var insightRecentBpms: [Double]?
+  private var insightClassifierReason: String?
+  private var lastAnalyzeSource = ""
+
+  private let knownMoods = Set(["calm", "stressed", "happy", "sad"])
 
   private let baseline = HealthBaselineReader()
   private let api = CardiacAPIClient()
@@ -95,7 +106,10 @@ final class MoodHub: NSObject, ObservableObject {
 
     do {
       let resp = try await api.analyze(deviceId: Config.deviceId, restingBpm: resting, samples: samples)
+      insightRestingBpm = resting
+      insightRecentBpms = bpms
       applyAnalyzeResponse(resp)
+      await refreshMoodInsight(selectedFallbackMood: resp.mood)
     } catch {
       lastError = String(describing: error)
     }
@@ -106,11 +120,67 @@ final class MoodHub: NSObject, ObservableObject {
     lastLabel = resp.label ?? resp.mood
     lastColorHex = resp.color
     lastReason = resp.reason ?? ""
+    insightClassifierReason = resp.reason
+    lastAnalyzeSource = resp.source ?? ""
     lampBrightness = Double(resp.brightness)
     if let v = resp.powerOn { lampPowerOn = v }
     if let v = resp.blinkEnabled { blinkEnabled = v }
     if let v = resp.blinkBpm { blinkBpm = min(220, max(30, v)) }
     lastUpdatedText = DateFormatter.localizedString(from: Date(), dateStyle: .none, timeStyle: .medium)
+  }
+
+  /// Clears Watch/analyze HR context when the user picks a mood tile so explanations switch to everyday hints until the next analyze.
+  func clearInsightHeartContextForManualSelection() {
+    insightRestingBpm = nil
+    insightRecentBpms = nil
+    insightClassifierReason = nil
+  }
+
+  func refreshMoodInsight(selectedFallbackMood: String = "calm") async {
+    moodInsightGeneration += 1
+    let token = moodInsightGeneration
+    let moodKey =
+      lastMood != "—" && knownMoods.contains(lastMood) ? lastMood : selectedFallbackMood
+
+    do {
+      let caption = try await api.explainMoodInsight(
+        deviceId: Config.deviceId,
+        mood: moodKey,
+        localDate: Self.localCalendarDateString(),
+        timeZoneId: TimeZone.current.identifier,
+        restingBpm: insightRestingBpm,
+        recentBpms: insightRecentBpms,
+        classifierReason: insightClassifierReason,
+        analyzeSource: lastAnalyzeSource.isEmpty ? nil : lastAnalyzeSource
+      )
+      guard token == moodInsightGeneration else { return }
+      moodInsight = caption
+    } catch {
+      guard token == moodInsightGeneration else { return }
+      moodInsight = Self.localFallbackInsight(mood: moodKey)
+    }
+  }
+
+  private static func localCalendarDateString() -> String {
+    let f = DateFormatter()
+    f.calendar = Calendar.current
+    f.locale = Locale(identifier: "en_US_POSIX")
+    f.timeZone = TimeZone.current
+    f.dateFormat = "yyyy-MM-dd"
+    return f.string(from: Date())
+  }
+
+  private static func localFallbackInsight(mood: String) -> String {
+    switch mood.lowercased() {
+    case "stressed":
+      return "Stressed tones can mirror a hectic stretch — weather, deadlines, or just too much coffee."
+    case "happy":
+      return "Happy glow fits sunny moods — weekend plans, good news, or the simple lift of a brighter hour."
+    case "sad":
+      return "Softer blues nod to quiet moments — rainy windows, long evenings, or needing gentler light."
+    default:
+      return "Calm gold suits slow breathing — cozy indoors, a pause between tasks, or a softer slice of the day."
+    }
   }
 
   /// Push lamp color/brightness to the server; ESP32 picks it up on the next `/v1/cardiac/latest` poll.
@@ -121,7 +191,8 @@ final class MoodHub: NSObject, ObservableObject {
     colorHexOverride: String?,
     powerOn: Bool,
     blinkEnabled: Bool,
-    blinkBpm: Double
+    blinkBpm: Double,
+    moodLabel: String?
   ) async {
     manualLampGeneration += 1
     let token = manualLampGeneration
@@ -136,11 +207,15 @@ final class MoodHub: NSObject, ObservableObject {
         colorHex: colorHexOverride,
         powerOn: powerOn,
         blinkEnabled: blinkEnabled,
-        blinkBpm: bpmClamped
+        blinkBpm: bpmClamped,
+        moodLabel: moodLabel
       )
       guard token == manualLampGeneration else { return }
+      insightRestingBpm = nil
+      insightRecentBpms = nil
       applyAnalyzeResponse(resp)
       lastError = ""
+      await refreshMoodInsight(selectedFallbackMood: mood)
     } catch {
       guard token == manualLampGeneration else { return }
       lastError = String(describing: error)

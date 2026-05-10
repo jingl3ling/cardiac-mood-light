@@ -20,12 +20,27 @@ private let validMoods = Set(moodPresets.map(\.id))
 
 private let lampSyncDebounceNs: UInt64 = 260_000_000
 
+private enum AppearancePreference: String, CaseIterable, Identifiable {
+  case system
+  case light
+  case dark
+
+  var id: String { rawValue }
+}
+
 struct ContentView: View {
   @EnvironmentObject private var hub: MoodHub
+  @Environment(\.colorScheme) private var colorScheme
+
+  /// Overrides system light/dark when not `system` (same idea as day vs night).
+  @AppStorage("littleLampAppearance") private var appearanceRaw = AppearancePreference.system.rawValue
 
   @State private var selectedMoodId = "calm"
   @State private var customColorEnabled = false
-  @State private var customColor = Color(red: 1, green: 215 / 255, blue: 0)
+  /// 0…1 hue for spectrum tint (saturation/brightness fixed for LED-friendly colors).
+  @State private var spectrumHue: Double = 0
+  @AppStorage("customMoodDisplayName") private var customMoodName = ""
+  @State private var blinkBpmDraft = "72"
   @State private var debouncedLampTask: Task<Void, Never>?
 
   private var selectedPreset: MoodPreset {
@@ -34,9 +49,30 @@ struct ContentView: View {
 
   private var previewHex: String {
     if customColorEnabled {
-      return customColor.rgbHexString() ?? selectedPreset.hex
+      return spectrumHex(fromHue: spectrumHue)
     }
     return selectedPreset.hex
+  }
+
+  private var headlineTitle: String {
+    if customColorEnabled {
+      let t = customMoodName.trimmingCharacters(in: .whitespacesAndNewlines)
+      if !t.isEmpty { return t }
+    }
+    if hub.lastLabel != "—" {
+      return hub.lastLabel
+    }
+    return selectedPreset.title
+  }
+
+  private var spectrumHueBinding: Binding<Double> {
+    Binding(
+      get: { spectrumHue },
+      set: {
+        spectrumHue = $0
+        scheduleLampSyncDebounced()
+      }
+    )
   }
 
   private var brightnessSliderBinding: Binding<Double> {
@@ -49,6 +85,24 @@ struct ContentView: View {
     )
   }
 
+  private var appearancePreference: Binding<AppearancePreference> {
+    Binding(
+      get: { AppearancePreference(rawValue: appearanceRaw) ?? .system },
+      set: { appearanceRaw = $0.rawValue }
+    )
+  }
+
+  private var resolvedPreferredColorScheme: ColorScheme? {
+    switch AppearancePreference(rawValue: appearanceRaw) ?? .system {
+    case .system:
+      return nil
+    case .light:
+      return .light
+    case .dark:
+      return .dark
+    }
+  }
+
   var body: some View {
     NavigationStack {
       ZStack {
@@ -56,10 +110,6 @@ struct ContentView: View {
 
         ScrollView {
           VStack(alignment: .leading, spacing: 18) {
-            CuteCard {
-              powerControlRow
-            }
-
             CuteCard {
               lampPreviewRow
             }
@@ -79,14 +129,49 @@ struct ContentView: View {
             CuteCard {
               watchAndHealthSection
             }
+
+            CuteCard {
+              appearanceSection
+            }
           }
           .padding(.horizontal, 18)
           .padding(.bottom, 28)
         }
       }
+      .preferredColorScheme(resolvedPreferredColorScheme)
       .navigationTitle("Little Lamp ✨")
-      .navigationBarTitleDisplayMode(.large)
+      .navigationBarTitleDisplayMode(.inline)
       .toolbarBackground(.visible, for: .navigationBar)
+      .toolbar {
+        ToolbarItem(placement: .topBarTrailing) {
+          Button {
+            hub.lampPowerOn.toggle()
+            syncLampImmediate()
+          } label: {
+            HStack(spacing: 6) {
+              Image(systemName: hub.lampPowerOn ? "power.circle.fill" : "power.circle")
+                .font(.system(size: 20))
+              Text(hub.lampPowerOn ? "On" : "Off")
+                .font(.system(.subheadline, design: .rounded).weight(.bold))
+            }
+            .foregroundStyle(hub.lampPowerOn ? Color.green : Color.secondary)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(
+              Capsule(style: .continuous)
+                .fill(Color(uiColor: .secondarySystemGroupedBackground))
+            )
+            .overlay(
+              Capsule(style: .continuous)
+                .strokeBorder(hub.lampPowerOn ? Color.green.opacity(0.45) : Color.clear, lineWidth: 1.5)
+            )
+            .contentShape(Capsule(style: .continuous))
+          }
+          .buttonStyle(.plain)
+          .accessibilityLabel("Lamp power")
+          .accessibilityValue(hub.lampPowerOn ? "On" : "Off")
+        }
+      }
     }
     .task {
       await hub.authorizeHealthIfNeeded()
@@ -96,46 +181,20 @@ struct ContentView: View {
         selectedMoodId = hub.lastMood
       }
       if customColorEnabled {
-        customColor = Color(hex: selectedPreset.hex) ?? customColor
+        spectrumHue = hueFromPresetHex(selectedPreset.hex)
       }
+      blinkBpmDraft = String(Int(hub.blinkBpm.rounded()))
+    }
+    .task(id: selectedMoodId) {
+      await hub.refreshMoodInsight(selectedFallbackMood: selectedMoodId)
+    }
+    .onChange(of: hub.blinkBpm) { _, newVal in
+      blinkBpmDraft = String(Int(newVal.rounded()))
     }
     .onDisappear {
       debouncedLampTask?.cancel()
       debouncedLampTask = nil
     }
-  }
-
-  private var powerControlRow: some View {
-    HStack(spacing: 14) {
-      Image(systemName: hub.lampPowerOn ? "power.circle.fill" : "power.circle")
-        .font(.system(size: 32))
-        .foregroundStyle(hub.lampPowerOn ? Color.green : Color.secondary)
-        .symbolRenderingMode(.hierarchical)
-        .accessibilityHidden(true)
-
-      VStack(alignment: .leading, spacing: 4) {
-        Text("Lamp")
-          .font(.system(.title3, design: .rounded).weight(.bold))
-        Text(hub.lampPowerOn ? "On" : "Off")
-          .font(.system(.subheadline, design: .rounded).weight(.medium))
-          .foregroundStyle(.secondary)
-      }
-
-      Spacer(minLength: 12)
-
-      Toggle("", isOn: $hub.lampPowerOn)
-      .labelsHidden()
-      .tint(Color(red: 0.2, green: 0.78, blue: 0.45))
-      .scaleEffect(1.35)
-      .padding(12)
-      .frame(minWidth: 88, minHeight: 52)
-      .contentShape(Rectangle())
-      .accessibilityLabel("Lamp power")
-      .onChange(of: hub.lampPowerOn) { _, _ in
-        syncLampImmediate()
-      }
-    }
-    .padding(.vertical, 6)
   }
 
   private var lampPreviewRow: some View {
@@ -168,9 +227,15 @@ struct ContentView: View {
       }
 
       VStack(alignment: .leading, spacing: 6) {
-        Text(hub.lastLabel == "—" ? selectedPreset.title : hub.lastLabel)
+        Text(headlineTitle)
           .font(.system(.title3, design: .rounded).weight(.bold))
           .foregroundStyle(.primary)
+        if !hub.moodInsight.isEmpty {
+          Text(hub.moodInsight)
+            .font(.system(.subheadline, design: .rounded))
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
         if !hub.lastUpdatedText.isEmpty {
           Text(hub.lastUpdatedText)
             .font(.system(.caption, design: .rounded))
@@ -191,46 +256,56 @@ struct ContentView: View {
 
       Divider().opacity(0.35)
 
-      HStack(spacing: 8) {
+      HStack(alignment: .center, spacing: 10) {
         Image(systemName: "waveform.path.ecg")
+          .font(.system(size: 22))
           .foregroundStyle(Color.pink.opacity(0.85))
+          .frame(width: 28, alignment: .center)
         Text("Blink")
           .font(.system(.headline, design: .rounded).weight(.semibold))
+        Spacer(minLength: 8)
+        Toggle("Blink to BPM", isOn: $hub.blinkEnabled)
+          .labelsHidden()
+          .tint(.pink)
+          .accessibilityLabel("Blink to BPM")
       }
-
-      Toggle(isOn: $hub.blinkEnabled) {
-        Text("Blink to BPM")
-          .font(.system(.subheadline, design: .rounded).weight(.medium))
-      }
-      .tint(.pink)
+      .frame(minHeight: 44)
       .onChange(of: hub.blinkEnabled) { _, _ in
         syncLampImmediate()
       }
 
       VStack(alignment: .leading, spacing: 10) {
         HStack {
-          Text("Beats per minute")
+          Text("Heartbeat (BPM)")
             .font(.system(.subheadline, design: .rounded))
           Spacer()
-          Text("\(Int(hub.blinkBpm.rounded()))")
-            .font(.system(.title3, design: .rounded).weight(.bold).monospacedDigit())
+          Text("Now \(Int(hub.blinkBpm.rounded()))")
+            .font(.system(.subheadline, design: .rounded).weight(.semibold).monospacedDigit())
             .foregroundStyle(Color.pink.opacity(0.9))
         }
 
-        Slider(value: $hub.blinkBpm, in: 30 ... 220, step: 1)
-          .tint(.pink.opacity(0.85))
-
-        TextField("e.g. 72", value: $hub.blinkBpm, format: .number.precision(.fractionLength(0)))
+        TextField("e.g. 72", text: $blinkBpmDraft)
           .keyboardType(.numberPad)
           .textFieldStyle(.roundedBorder)
           .font(.system(.body, design: .rounded).weight(.medium).monospacedDigit())
+          .disabled(!hub.blinkEnabled)
+
+        Button {
+          applyHeartbeatBpmEntry()
+        } label: {
+          Text("Apply heartbeat")
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(.pink)
+        .disabled(!hub.blinkEnabled)
+
+        Text("Uses 30–220 BPM on the lamp (values are adjusted when you apply).")
+          .font(.system(.caption2, design: .rounded))
+          .foregroundStyle(.secondary)
       }
       .opacity(hub.blinkEnabled ? 1 : 0.45)
       .allowsHitTesting(hub.blinkEnabled)
-      .onChange(of: hub.blinkBpm) { _, newVal in
-        hub.blinkBpm = min(220, max(30, newVal))
-        scheduleLampSyncDebounced()
-      }
 
       if hub.isSending {
         ProgressView()
@@ -260,23 +335,58 @@ struct ContentView: View {
   }
 
   private var customColorSection: some View {
-    VStack(alignment: .leading, spacing: 12) {
-      Toggle(isOn: $customColorEnabled) {
+    VStack(alignment: .leading, spacing: 14) {
+      HStack(alignment: .center, spacing: 10) {
         Text("Custom tint")
           .font(.system(.headline, design: .rounded).weight(.semibold))
+        Spacer(minLength: 8)
+        Toggle("Custom tint", isOn: $customColorEnabled)
+          .labelsHidden()
+          .tint(Color(red: 0.98, green: 0.55, blue: 0.72))
+          .accessibilityLabel("Custom tint")
       }
-      .tint(Color(red: 0.98, green: 0.55, blue: 0.72))
+      .frame(minHeight: 44)
       .onChange(of: customColorEnabled) { _, enabled in
         if enabled {
-          customColor = Color(hex: selectedPreset.hex) ?? customColor
+          spectrumHue = hueFromPresetHex(selectedPreset.hex)
         }
         syncLampImmediate()
       }
 
       if customColorEnabled {
-        ColorPicker("Tint", selection: $customColor, supportsOpacity: false)
-          .labelsHidden()
-          .onChange(of: customColor) { _, _ in
+        Text("Spectrum")
+          .font(.system(.subheadline, design: .rounded).weight(.semibold))
+          .foregroundStyle(.secondary)
+
+        ZStack {
+          LinearGradient(
+            colors: [
+              .red,
+              Color(red: 1, green: 1, blue: 0),
+              .green,
+              .cyan,
+              .blue,
+              Color(red: 0.58, green: 0.44, blue: 0.86),
+              .red,
+            ],
+            startPoint: .leading,
+            endPoint: .trailing
+          )
+          .frame(height: 36)
+          .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+          Slider(value: spectrumHueBinding, in: 0 ... 1)
+            .tint(Color.white.opacity(0.35))
+            .padding(.horizontal, 4)
+        }
+
+        TextField("Name this mood", text: $customMoodName)
+          .textFieldStyle(.roundedBorder)
+          .font(.system(.body, design: .rounded))
+          .onChange(of: customMoodName) { _, newVal in
+            if newVal.count > 48 {
+              customMoodName = String(newVal.prefix(48))
+            }
             guard customColorEnabled else { return }
             scheduleLampSyncDebounced()
           }
@@ -309,6 +419,35 @@ struct ContentView: View {
     }
   }
 
+  private var appearanceSection: some View {
+    VStack(alignment: .leading, spacing: 12) {
+      Toggle(isOn: Binding(
+        get: {
+          AppearancePreference(rawValue: appearanceRaw) != .system
+        },
+        set: { fixed in
+          if fixed {
+            appearanceRaw = (colorScheme == .dark ? AppearancePreference.dark : AppearancePreference.light).rawValue
+          } else {
+            appearanceRaw = AppearancePreference.system.rawValue
+          }
+        }
+      )) {
+        Text("Fixed day/night look")
+          .font(.system(.subheadline, design: .rounded).weight(.semibold))
+      }
+      .tint(.indigo)
+
+      if AppearancePreference(rawValue: appearanceRaw) != .system {
+        Picker("Interface", selection: appearancePreference) {
+          Text("Light").tag(AppearancePreference.light)
+          Text("Dark").tag(AppearancePreference.dark)
+        }
+        .pickerStyle(.segmented)
+      }
+    }
+  }
+
   private func scheduleLampSyncDebounced() {
     debouncedLampTask?.cancel()
     debouncedLampTask = Task {
@@ -317,10 +456,11 @@ struct ContentView: View {
       await hub.pushManualLamp(
         mood: selectedMoodId,
         brightness: Int(hub.lampBrightness.rounded()),
-        colorHexOverride: customColorEnabled ? customColor.rgbHexString() : nil,
+        colorHexOverride: colorHexForAPI(),
         powerOn: hub.lampPowerOn,
         blinkEnabled: hub.blinkEnabled,
-        blinkBpm: hub.blinkBpm
+        blinkBpm: hub.blinkBpm,
+        moodLabel: resolvedMoodLabelForAPI()
       )
     }
   }
@@ -332,10 +472,11 @@ struct ContentView: View {
       await hub.pushManualLamp(
         mood: selectedMoodId,
         brightness: Int(hub.lampBrightness.rounded()),
-        colorHexOverride: customColorEnabled ? customColor.rgbHexString() : nil,
+        colorHexOverride: colorHexForAPI(),
         powerOn: hub.lampPowerOn,
         blinkEnabled: hub.blinkEnabled,
-        blinkBpm: hub.blinkBpm
+        blinkBpm: hub.blinkBpm,
+        moodLabel: resolvedMoodLabelForAPI()
       )
     }
   }
@@ -343,9 +484,10 @@ struct ContentView: View {
   @ViewBuilder
   private func moodTile(_ preset: MoodPreset, isSelected: Bool) -> some View {
     Button {
+      hub.clearInsightHeartContextForManualSelection()
       selectedMoodId = preset.id
-      if !customColorEnabled {
-        customColor = Color(hex: preset.hex) ?? customColor
+      if customColorEnabled {
+        spectrumHue = hueFromPresetHex(preset.hex)
       }
       syncLampImmediate()
     } label: {
@@ -385,18 +527,82 @@ struct ContentView: View {
     }
     .buttonStyle(.plain)
   }
+
+  private func applyHeartbeatBpmEntry() {
+    hub.lastError = ""
+    let trimmed = blinkBpmDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else {
+      blinkBpmDraft = String(Int(hub.blinkBpm.rounded()))
+      return
+    }
+    let normalized = trimmed.replacingOccurrences(of: ",", with: ".")
+    guard let parsed = Double(normalized), parsed.isFinite else {
+      hub.lastError = "Enter a valid number for BPM."
+      return
+    }
+    let clamped = min(220, max(30, parsed))
+    hub.blinkBpm = clamped
+    blinkBpmDraft = String(Int(clamped.rounded()))
+    syncLampImmediate()
+  }
+
+  private func resolvedMoodLabelForAPI() -> String? {
+    guard customColorEnabled else { return nil }
+    let t = customMoodName.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !t.isEmpty else { return nil }
+    return String(t.prefix(48))
+  }
+
+  private func colorHexForAPI() -> String? {
+    guard customColorEnabled else { return nil }
+    return spectrumHex(fromHue: spectrumHue)
+  }
+
+  private func hueFromPresetHex(_ hex: String) -> Double {
+    guard let swift = Color(hex: hex) else { return 0 }
+    let ui = UIColor(swift)
+    var h: CGFloat = 0
+    var s: CGFloat = 0
+    var b: CGFloat = 0
+    var a: CGFloat = 0
+    guard ui.getHue(&h, saturation: &s, brightness: &b, alpha: &a) else { return 0 }
+    return Double(h)
+  }
+
+  private func spectrumHex(fromHue hue: Double) -> String {
+    let ui = UIColor(hue: CGFloat(hue), saturation: 0.92, brightness: 0.98, alpha: 1)
+    var r: CGFloat = 0
+    var g: CGFloat = 0
+    var bl: CGFloat = 0
+    var a: CGFloat = 0
+    ui.getRed(&r, green: &g, blue: &bl, alpha: &a)
+    return String(
+      format: "#%02X%02X%02X",
+      Int(round(r * 255)),
+      Int(round(g * 255)),
+      Int(round(bl * 255))
+    )
+  }
 }
 
 // MARK: - Cute chrome
 
 private struct CuteBackgroundView: View {
+  @Environment(\.colorScheme) private var colorScheme
+
   var body: some View {
     LinearGradient(
-      colors: [
-        Color(red: 0.99, green: 0.93, blue: 0.97),
-        Color(red: 0.93, green: 0.96, blue: 1.0),
-        Color(red: 0.94, green: 0.99, blue: 0.96),
-      ],
+      colors: colorScheme == .dark
+        ? [
+            Color(red: 0.09, green: 0.10, blue: 0.16),
+            Color(red: 0.11, green: 0.09, blue: 0.14),
+            Color(red: 0.08, green: 0.12, blue: 0.11),
+          ]
+        : [
+            Color(red: 0.99, green: 0.93, blue: 0.97),
+            Color(red: 0.93, green: 0.96, blue: 1.0),
+            Color(red: 0.94, green: 0.99, blue: 0.96),
+          ],
       startPoint: .topLeading,
       endPoint: .bottomTrailing
     )
@@ -409,15 +615,11 @@ private struct CuteCard<Content: View>: View {
 
   var body: some View {
     content()
-      .padding(16)
+      .padding(18)
       .background(
         RoundedRectangle(cornerRadius: 22, style: .continuous)
           .fill(.ultraThinMaterial)
           .shadow(color: .black.opacity(0.06), radius: 12, y: 6)
-      )
-      .overlay(
-        RoundedRectangle(cornerRadius: 22, style: .continuous)
-          .strokeBorder(Color.white.opacity(0.55), lineWidth: 1)
       )
   }
 }
@@ -431,21 +633,6 @@ private extension Color {
     let g = Double((v >> 8) & 0xFF) / 255
     let b = Double(v & 0xFF) / 255
     self.init(red: r, green: g, blue: b)
-  }
-
-  func rgbHexString() -> String? {
-    let ui = UIColor(self)
-    var r: CGFloat = 0
-    var g: CGFloat = 0
-    var b: CGFloat = 0
-    var a: CGFloat = 0
-    guard ui.getRed(&r, green: &g, blue: &b, alpha: &a) else { return nil }
-    return String(
-      format: "#%02X%02X%02X",
-      Int(round(r * 255)),
-      Int(round(g * 255)),
-      Int(round(b * 255))
-    )
   }
 }
 

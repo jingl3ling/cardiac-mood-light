@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Little Lamp ✨</title>
+    <link rel="stylesheet" href="./app.css" />
+  </head>
+  <body>
+    <header class="top-bar">
+      <span class="title">Little Lamp ✨</span>
+      <button type="button" class="power-btn" id="powerBtn" aria-label="Lamp power">
+        <span id="powerIcon">⏻</span>
+        <span id="powerLabel">On</span>
+      </button>
+    </header>
+
+    <div class="wrap">
+      <section class="card settings">
+        <details>
+          <summary>API &amp; device</summary>
+          <div class="field" style="margin-top: 12px">
+            <label for="baseUrl">API base URL</label>
+            <input type="text" id="baseUrl" placeholder="Leave empty for same origin" autocomplete="off" />
+          </div>
+          <div class="field">
+            <label for="apiKey">x-api-key</label>
+            <input type="password" id="apiKey" placeholder="Match server API_KEY" autocomplete="off" />
+          </div>
+          <div class="field">
+            <label for="deviceId">deviceId</label>
+            <input type="text" id="deviceId" placeholder="device-001" autocomplete="off" />
+          </div>
+          <p class="hint">Values are saved in your browser (localStorage). Empty base URL uses this server.</p>
+        </details>
+      </section>
+
+      <section class="card">
+        <div class="preview-row">
+          <div class="glow" id="lampGlow" aria-hidden="true"></div>
+          <div class="preview-text">
+            <h2 id="headline">Calm</h2>
+            <p class="insight" id="moodInsight"></p>
+            <p class="time" id="updatedAt"></p>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="mood-grid" id="moodGrid"></div>
+        <hr class="soft" />
+
+        <div class="row-between">
+          <span class="h">💗 Blink</span>
+          <label class="sub">
+            <input type="checkbox" id="blinkEnabled" />
+            Blink to BPM
+          </label>
+        </div>
+
+        <div id="blinkPanel" style="margin-top: 12px; opacity: 0.45; pointer-events: none">
+          <div class="row-between">
+            <span class="sub">Heartbeat (BPM)</span>
+            <span class="sub" style="color: var(--accent-pink)">Now <span id="blinkBpmDisplay">72</span></span>
+          </div>
+          <input type="text" id="blinkBpmDraft" inputmode="numeric" placeholder="e.g. 72" />
+          <button type="button" class="btn-primary" id="applyBpmBtn" style="margin-top: 10px">Apply heartbeat</button>
+          <p class="hint">Uses 30–220 BPM on the lamp (values are adjusted when you apply).</p>
+        </div>
+
+        <div id="syncSpinner" style="display: none; margin-top: 8px"><span class="loading-dot"></span></div>
+        <div class="error" id="lastError"></div>
+      </section>
+
+      <section class="card">
+        <div class="row-between">
+          <span class="h">Glow</span>
+          <span class="h" id="brightnessVal">120</span>
+        </div>
+        <input type="range" id="brightness" min="0" max="255" step="1" value="120" />
+      </section>
+
+      <section class="card">
+        <div class="row-between">
+          <span class="h">Custom tint</span>
+          <label class="sub">
+            <input type="checkbox" id="customColorEnabled" />
+            Enable
+          </label>
+        </div>
+        <div id="customPanel" style="display: none; margin-top: 12px">
+          <span class="sub">Spectrum</span>
+          <div class="spectrum-wrap">
+            <div class="spectrum-bg" aria-hidden="true"></div>
+            <input type="range" id="spectrumHue" min="0" max="1" step="0.001" value="0" />
+          </div>
+          <div class="field" style="margin-top: 12px">
+            <label for="customMoodName">Name this mood</label>
+            <input type="text" id="customMoodName" maxlength="48" placeholder="Optional label" />
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <span class="sub" style="font-weight: 700">❤️‍🩹 Simulator (Watch / analyze)</span>
+        <p class="hint" style="margin-top: 8px">
+          Browser-only: POST samples to <code>/v1/cardiac/analyze</code> like the watch. Updates lamp state + mood insight.
+        </p>
+        <div class="field" style="margin-top: 10px">
+          <label for="restingBpm">Resting BPM (optional)</label>
+          <input type="number" id="restingBpm" min="30" max="120" placeholder="72" />
+        </div>
+        <div class="field">
+          <label for="bpmSamples">BPM samples (comma-separated, oldest→newest)</label>
+          <textarea id="bpmSamples" rows="3">72,71,70,72,71</textarea>
+        </div>
+        <button type="button" class="btn-secondary" id="runAnalyzeBtn" style="width: 100%; margin-top: 8px">
+          Run analyze
+        </button>
+      </section>
+
+      <section class="card">
+        <span class="sub" style="font-weight: 700">Appearance</span>
+        <div style="margin-top: 10px">
+          <label class="sub">
+            <input type="checkbox" id="fixedAppearance" />
+            Fixed day/night look
+          </label>
+        </div>
+        <div id="appearancePick" style="display: none; margin-top: 10px">
+          <div class="segmented" role="group" aria-label="Interface">
+            <button type="button" data-appearance="light">Light</button>
+            <button type="button" data-appearance="dark">Dark</button>
+          </div>
+        </div>
+      </section>
+
+      <footer class="docs">
+        <a href="/docs">OpenAPI</a>
+        ·
+        <a href="/health">Health</a>
+        ·
+        <a href="/">API home</a>
+      </footer>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
