@@ -64,6 +64,83 @@ struct SyncBlinkRequestBody: Codable {
   let blinkEnabled: Bool
 }
 
+/// `GET /v1/cardiac/latest` — lamp state plus optional viewer fields from `viewer-context`.
+struct LatestStateDTO: Codable {
+  let mood: String
+  let label: String?
+  let color: String
+  let brightness: Int
+  let updatedAt: Double?
+  let powerOn: Bool?
+  let blinkEnabled: Bool?
+  let blinkBpm: Double?
+  let reportedHeartRateBpm: Double?
+  let reportedHeartRateAt: Double?
+  let moodInsight: String?
+  let viewerContextUpdatedAt: Double?
+
+  enum CodingKeys: String, CodingKey {
+    case mood, label, color, brightness, updatedAt, powerOn, blinkEnabled, blinkBpm
+    case reportedHeartRateBpm, reportedHeartRateAt, moodInsight, viewerContextUpdatedAt
+  }
+
+  init(
+    mood: String,
+    label: String?,
+    color: String,
+    brightness: Int,
+    updatedAt: Double?,
+    powerOn: Bool?,
+    blinkEnabled: Bool?,
+    blinkBpm: Double?,
+    reportedHeartRateBpm: Double?,
+    reportedHeartRateAt: Double?,
+    moodInsight: String?,
+    viewerContextUpdatedAt: Double?
+  ) {
+    self.mood = mood
+    self.label = label
+    self.color = color
+    self.brightness = brightness
+    self.updatedAt = updatedAt
+    self.powerOn = powerOn
+    self.blinkEnabled = blinkEnabled
+    self.blinkBpm = blinkBpm
+    self.reportedHeartRateBpm = reportedHeartRateBpm
+    self.reportedHeartRateAt = reportedHeartRateAt
+    self.moodInsight = moodInsight
+    self.viewerContextUpdatedAt = viewerContextUpdatedAt
+  }
+
+  init(from decoder: Decoder) throws {
+    let c = try decoder.container(keyedBy: CodingKeys.self)
+    mood = try c.decode(String.self, forKey: .mood)
+    label = try c.decodeIfPresent(String.self, forKey: .label)
+    color = try c.decode(String.self, forKey: .color)
+    if let b = try? c.decode(Int.self, forKey: .brightness) {
+      brightness = b
+    } else if let d = try? c.decode(Double.self, forKey: .brightness) {
+      brightness = Int(d.rounded())
+    } else {
+      brightness = 128
+    }
+    updatedAt = try c.decodeIfPresent(Double.self, forKey: .updatedAt)
+    powerOn = try c.decodeIfPresent(Bool.self, forKey: .powerOn)
+    blinkEnabled = try c.decodeIfPresent(Bool.self, forKey: .blinkEnabled)
+    blinkBpm = try c.decodeIfPresent(Double.self, forKey: .blinkBpm)
+    reportedHeartRateBpm = try c.decodeIfPresent(Double.self, forKey: .reportedHeartRateBpm)
+    reportedHeartRateAt = try c.decodeIfPresent(Double.self, forKey: .reportedHeartRateAt)
+    moodInsight = try c.decodeIfPresent(String.self, forKey: .moodInsight)
+    viewerContextUpdatedAt = try c.decodeIfPresent(Double.self, forKey: .viewerContextUpdatedAt)
+  }
+}
+
+struct ViewerContextRequestBody: Codable {
+  let deviceId: String
+  let reportedHeartRateBpm: Double?
+  let moodInsight: String?
+}
+
 enum CardiacAPIError: Error {
   case badStatus(Int)
   case decodeFailed
@@ -184,5 +261,47 @@ struct CardiacAPIClient {
     guard (200 ... 299).contains(http.statusCode) else { throw CardiacAPIError.badStatus(http.statusCode) }
     let decoded = try JSONDecoder().decode(ExplainMoodResponseBody.self, from: data)
     return decoded.caption
+  }
+
+  func getLatest(deviceId: String) async throws -> LatestStateDTO {
+    var components = URLComponents(
+      url: Config.baseURL.appendingPathComponent("/v1/cardiac/latest"),
+      resolvingAgainstBaseURL: false
+    )!
+    components.queryItems = [URLQueryItem(name: "deviceId", value: deviceId)]
+    var req = URLRequest(url: components.url!)
+    req.httpMethod = "GET"
+    if !Config.apiKey.isEmpty {
+      req.setValue(Config.apiKey, forHTTPHeaderField: "x-api-key")
+    }
+
+    let (data, resp) = try await session.data(for: req)
+    guard let http = resp as? HTTPURLResponse else { throw CardiacAPIError.badStatus(-1) }
+    guard (200 ... 299).contains(http.statusCode) else { throw CardiacAPIError.badStatus(http.statusCode) }
+    return try JSONDecoder().decode(LatestStateDTO.self, from: data)
+  }
+
+  /// Push Health BPM and/or mood line for the family viewer app (does not drive the lamp by itself).
+  func postViewerContext(
+    deviceId: String,
+    reportedHeartRateBpm: Double?,
+    moodInsight: String?
+  ) async throws {
+    let t = moodInsight?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    let cap: String? = t.isEmpty ? nil : String(t.prefix(500))
+    let hr = reportedHeartRateBpm.map { min(230, max(30, $0)) }
+    guard hr != nil || cap != nil else { return }
+    var req = URLRequest(url: Config.baseURL.appendingPathComponent("/v1/cardiac/viewer-context"))
+    req.httpMethod = "POST"
+    req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    if !Config.apiKey.isEmpty {
+      req.setValue(Config.apiKey, forHTTPHeaderField: "x-api-key")
+    }
+    let body = ViewerContextRequestBody(deviceId: deviceId, reportedHeartRateBpm: hr, moodInsight: cap)
+    req.httpBody = try JSONEncoder().encode(body)
+
+    let (_, resp) = try await session.data(for: req)
+    guard let http = resp as? HTTPURLResponse else { throw CardiacAPIError.badStatus(-1) }
+    guard (200 ... 299).contains(http.statusCode) else { throw CardiacAPIError.badStatus(http.statusCode) }
   }
 }

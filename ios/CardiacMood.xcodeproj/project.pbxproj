@@ -18,6 +18,12 @@
 		C339FA774E5F4E44A1FABEB2 /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F812F49CF634DDAABE5AE45 /* Config.swift */; };
 		4FB2DFA49F0040CAA8E816E4 /* WatchConnectivitySender.swift in Sources */ = {isa = PBXBuildFile; fileRef = C37A405CF4AB4A23A12E2136 /* WatchConnectivitySender.swift */; };
 		B7B9AC3855294263980C59C6 /* WorkoutHeartBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8E7C743104C4A459CB78048 /* WorkoutHeartBuffer.swift */; };
+		E1F2A3B4C5D60718293A4B5C010 /* MoodViewerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1F2A3B4C5D60718293A4B5C003 /* MoodViewerApp.swift */; };
+		E1F2A3B4C5D60718293A4B5C011 /* ViewerRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1F2A3B4C5D60718293A4B5C004 /* ViewerRootView.swift */; };
+		E1F2A3B4C5D60718293A4B5C012 /* ColorHex.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1F2A3B4C5D60718293A4B5C005 /* ColorHex.swift */; };
+		E1F2A3B4C5D60718293A4B5C013 /* ViewerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1F2A3B4C5D60718293A4B5C006 /* ViewerViewModel.swift */; };
+		E1F2A3B4C5D60718293A4B5C014 /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B3CE7D4AA0C4CAF825A7B23 /* Config.swift */; };
+		E1F2A3B4C5D60718293A4B5C015 /* CardiacAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6EE2FF7881C43F086DD0C7C /* CardiacAPIClient.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -36,11 +42,17 @@
 		5F812F49CF634DDAABE5AE45 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
 		C37A405CF4AB4A23A12E2136 /* WatchConnectivitySender.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchConnectivitySender.swift; sourceTree = "<group>"; };
 		C8E7C743104C4A459CB78048 /* WorkoutHeartBuffer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutHeartBuffer.swift; sourceTree = "<group>"; };
+		E1F2A3B4C5D60718293A4B5C001 /* MoodViewer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MoodViewer.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		E1F2A3B4C5D60718293A4B5C003 /* MoodViewerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoodViewerApp.swift; sourceTree = "<group>"; };
+		E1F2A3B4C5D60718293A4B5C004 /* ViewerRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewerRootView.swift; sourceTree = "<group>"; };
+		E1F2A3B4C5D60718293A4B5C005 /* ColorHex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorHex.swift; sourceTree = "<group>"; };
+		E1F2A3B4C5D60718293A4B5C006 /* ViewerViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewerViewModel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		56EE9705017C4835A3185BD7 /* Frameworks */ = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = ( ); runOnlyForDeploymentPostprocessing = 0; };
 		449B156792FD4E39924D671C /* Frameworks */ = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = ( ); runOnlyForDeploymentPostprocessing = 0; };
+		E1F2A3B4C5D60718293A4B5C022 /* Frameworks */ = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = ( ); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -48,6 +60,7 @@
 			isa = PBXGroup;
 			children = (
 				AE4553B75BCA43D9B933DDBC /* CardiacMood */,
+				E1F2A3B4C5D60718293A4B5C002 /* MoodViewer */,
 				15323589F80940E895535099 /* CardiacMoodWatch */,
 				3356F9CECD544DB19B4129E2 /* Products */,
 			);
@@ -68,6 +81,17 @@
 			path = CardiacMood;
 			sourceTree = "<group>";
 		};
+		E1F2A3B4C5D60718293A4B5C002 /* MoodViewer */ = {
+			isa = PBXGroup;
+			children = (
+				E1F2A3B4C5D60718293A4B5C003 /* MoodViewerApp.swift */,
+				E1F2A3B4C5D60718293A4B5C004 /* ViewerRootView.swift */,
+				E1F2A3B4C5D60718293A4B5C006 /* ViewerViewModel.swift */,
+				E1F2A3B4C5D60718293A4B5C005 /* ColorHex.swift */,
+			);
+			path = MoodViewer;
+			sourceTree = "<group>";
+		};
 		15323589F80940E895535099 /* CardiacMoodWatch */ = {
 			isa = PBXGroup;
 			children = (
@@ -84,6 +108,7 @@
 			isa = PBXGroup;
 			children = (
 				835C23EDEC7B45F1AF4BDD8E /* CardiacMood.app */,
+				E1F2A3B4C5D60718293A4B5C001 /* MoodViewer.app */,
 				58A542D137484F38A56C2EE5 /* CardiacMoodWatch.app */,
 			);
 			name = Products;
@@ -123,6 +148,21 @@
 			productReference = 58A542D137484F38A56C2EE5 /* CardiacMoodWatch.app */;
 			productType = "com.apple.product-type.application";
 		};
+		E1F2A3B4C5D60718293A4B5C020 /* MoodViewer */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E1F2A3B4C5D60718293A4B5C032 /* Build configuration list for PBXNativeTarget "MoodViewer" */;
+			buildPhases = (
+				E1F2A3B4C5D60718293A4B5C021 /* Sources */,
+				E1F2A3B4C5D60718293A4B5C022 /* Frameworks */,
+				E1F2A3B4C5D60718293A4B5C023 /* Resources */,
+			);
+			buildRules = ( );
+			dependencies = ( );
+			name = MoodViewer;
+			productName = MoodViewer;
+			productReference = E1F2A3B4C5D60718293A4B5C001 /* MoodViewer.app */;
+			productType = "com.apple.product-type.application";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -134,6 +174,7 @@
 				TargetAttributes = {
 					AD6290A2B1DF4C6794B86005 = { CreatedOnToolsVersion = 15.2; DevelopmentTeam = 877MZL68G8; ProvisioningStyle = Automatic; };
 					5C1559F0FDCE4497A41D2851 = { CreatedOnToolsVersion = 15.2; DevelopmentTeam = 877MZL68G8; ProvisioningStyle = Automatic; };
+					E1F2A3B4C5D60718293A4B5C020 = { CreatedOnToolsVersion = 15.2; DevelopmentTeam = 877MZL68G8; ProvisioningStyle = Automatic; };
 				};
 			};
 			buildConfigurationList = 829B437550684F108715A653 /* Build configuration list for PBXProject "CardiacMood" */;
@@ -144,6 +185,7 @@
 			projectDirPath = ""; projectRoot = "";
 			targets = (
 				AD6290A2B1DF4C6794B86005 /* CardiacMood */,
+				E1F2A3B4C5D60718293A4B5C020 /* MoodViewer */,
 				5C1559F0FDCE4497A41D2851 /* CardiacMoodWatch */,
 			);
 		};
@@ -155,6 +197,7 @@
 				1B44497382F64D64AC8B44F7 /* Assets.xcassets in Resources */,
 			); runOnlyForDeploymentPostprocessing = 0; };
 		FAE041C2722F41DDABDC28AD /* Resources */ = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = ( ); runOnlyForDeploymentPostprocessing = 0; };
+		E1F2A3B4C5D60718293A4B5C023 /* Resources */ = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = ( ); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -174,6 +217,15 @@
 				C339FA774E5F4E44A1FABEB2 /* Config.swift in Sources */,
 				4FB2DFA49F0040CAA8E816E4 /* WatchConnectivitySender.swift in Sources */,
 				B7B9AC3855294263980C59C6 /* WorkoutHeartBuffer.swift in Sources */,
+			); runOnlyForDeploymentPostprocessing = 0; };
+		E1F2A3B4C5D60718293A4B5C021 /* Sources */ = {
+			isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (
+				E1F2A3B4C5D60718293A4B5C010 /* MoodViewerApp.swift in Sources */,
+				E1F2A3B4C5D60718293A4B5C011 /* ViewerRootView.swift in Sources */,
+				E1F2A3B4C5D60718293A4B5C013 /* ViewerViewModel.swift in Sources */,
+				E1F2A3B4C5D60718293A4B5C012 /* ColorHex.swift in Sources */,
+				E1F2A3B4C5D60718293A4B5C014 /* Config.swift in Sources */,
+				E1F2A3B4C5D60718293A4B5C015 /* CardiacAPIClient.swift in Sources */,
 			); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
@@ -322,12 +374,63 @@
 			};
 			name = Release;
 		};
+		E1F2A3B4C5D60718293A4B5C030 /* Debug */ = {
+			isa = XCBuildConfiguration; buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 877MZL68G8;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Little Lamp Family";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.cardiacmood.MoodViewer;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+			};
+			name = Debug;
+		};
+		E1F2A3B4C5D60718293A4B5C031 /* Release */ = {
+			isa = XCBuildConfiguration; buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 877MZL68G8;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Little Lamp Family";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.cardiacmood.MoodViewer;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
 		829B437550684F108715A653 /* project */ = { isa = XCConfigurationList; buildConfigurations = ( A2A99A530A6B433294C973FB /* Debug */, C3D31C5EFB4347F3BD7EAC5B /* Release */ ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 		494B49A9479945BBB0280B36 /* ios */ = { isa = XCConfigurationList; buildConfigurations = ( 5110C7CFCB2B4681831CB0D8 /* Debug */, 37D082D657D94F64AD40A3BE /* Release */ ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 		73A1B15007FF4696BDDE854B /* watch */ = { isa = XCConfigurationList; buildConfigurations = ( 7013CF21CBF74BDC811A45FC /* Debug */, 2C1A1B71AFDA4C76BBE27D43 /* Release */ ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		E1F2A3B4C5D60718293A4B5C032 /* Build configuration list for PBXNativeTarget "MoodViewer" */ = { isa = XCConfigurationList; buildConfigurations = ( E1F2A3B4C5D60718293A4B5C030 /* Debug */, E1F2A3B4C5D60718293A4B5C031 /* Release */ ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 /* End XCConfigurationList section */
 	};
 	rootObject = CADAA52C0EAD464D9EF49A7B /* Project object */;

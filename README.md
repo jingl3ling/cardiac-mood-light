@@ -42,7 +42,14 @@ uvicorn cardiac_mood.main:app --host 0.0.0.0 --port 8080
 ```
 
 - `POST /v1/cardiac/analyze` — body: `{ "deviceId": "...", "restingBpm": 68.0, "samples": [ { "t": "ISO8601", "bpm": 72 } ] }` — header `x-api-key` if configured.
-- `GET /v1/cardiac/latest?deviceId=...` — same header; returns `mood`, `color`, `brightness`, `label`, `updatedAt`.
+- `GET /v1/cardiac/latest?deviceId=...` — same header; returns `mood`, `color`, `brightness`, `label`, `updatedAt`, optional `reportedHeartRateBpm`, `reportedHeartRateAt`, `moodInsight`, `viewerContextUpdatedAt`.
+- `POST /v1/cardiac/viewer-context` — body: `{ "deviceId", "reportedHeartRateBpm"?, "moodInsight"? }` (at least one optional field). Merges the latest heart rate and mood line for the **Little Lamp Family** app; does not replace lamp color by itself.
+
+## Little Lamp Family (viewer app)
+
+Build the **MoodViewer** scheme in [`ios/CardiacMood.xcodeproj`](ios/CardiacMood.xcodeproj). Uses the same [`Config.swift`](ios/CardiacMood/Config.swift) as the main app (`baseURL`, `apiKey`, `deviceId` must match the lamp).
+
+Install on a family member’s iPhone: they can see mood + heartbeat text synced from the main **Cardiac Mood** app, and adjust brightness, power, and blink. No Health permission required on their phone.
 
 ## iOS + watchOS
 
@@ -66,4 +73,4 @@ See [esp32/CardiacMoodLED/README.md](esp32/CardiacMoodLED/README.md). Set Wi‑F
 
 ## Privacy
 
-The MVP stores only the **latest mood per `deviceId`** in memory on the server; it does not persist raw Health data.
+The MVP stores only the **latest mood per `deviceId`** in memory on the server; it does not persist raw Health data. The main phone may push **last reported BPM** and a short **mood insight** string for family viewers via `viewer-context`; treat the shared `apiKey` like a household password.

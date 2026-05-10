@@ -18,6 +18,8 @@ private let moodPresets: [MoodPreset] = [
 
 private let validMoods = Set(moodPresets.map(\.id))
 
+private let testHeartbeatBpms: [Int] = [50, 60, 70, 80, 90, 100, 140]
+
 private let lampSyncDebounceNs: UInt64 = 8_000_000
 
 private enum AppearancePreference: String, CaseIterable, Identifiable {
@@ -118,6 +120,10 @@ struct ContentView: View {
 
             CuteCard {
               customColorSection
+            }
+
+            CuteCard {
+              testHeartbeatSection
             }
 
             CuteCard {
@@ -442,6 +448,52 @@ struct ContentView: View {
             guard customColorEnabled else { return }
             scheduleLampSyncDebounced()
           }
+      }
+    }
+  }
+
+  private var testHeartbeatSection: some View {
+    VStack(alignment: .leading, spacing: 12) {
+      Text("Test heartbeat")
+        .font(.system(.headline, design: .rounded).weight(.semibold))
+      Text(
+        "Drive blink speed with fixed BPM values instead of Apple Health—useful for tuning the lamp. Enabling sends the rate to your server."
+      )
+      .font(.system(.caption, design: .rounded))
+      .foregroundStyle(.secondary)
+
+      Toggle(
+        "Use test BPM for blink",
+        isOn: Binding(
+          get: { hub.testHeartbeatEnabled },
+          set: { hub.applyTestHeartbeatEnabled($0) }
+        )
+      )
+      .tint(.pink)
+      .onChange(of: hub.testHeartbeatEnabled) { _, _ in
+        syncLampImmediate()
+      }
+
+      Text("BPM")
+        .font(.system(.subheadline, design: .rounded).weight(.semibold))
+        .foregroundStyle(.secondary)
+
+      LazyVGrid(columns: [GridItem(.adaptive(minimum: 76))], spacing: 10) {
+        ForEach(testHeartbeatBpms, id: \.self) { v in
+          let selected =
+            hub.testHeartbeatEnabled && Int(hub.testHeartbeatBpm.rounded()) == v
+          Button {
+            hub.applyTestHeartbeatEnabled(true)
+            hub.applyTestHeartbeatBpm(Double(v))
+            syncLampImmediate()
+          } label: {
+            Text("\(v)")
+              .font(.system(.body, design: .rounded).weight(.semibold))
+              .frame(maxWidth: .infinity)
+          }
+          .buttonStyle(.bordered)
+          .tint(selected ? Color.pink : Color.secondary)
+        }
       }
     }
   }

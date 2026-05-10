@@ -128,6 +128,14 @@ class SyncBlinkBody(BaseModel):
     blinkEnabled: bool = Field(False)
 
 
+class ViewerContextBody(BaseModel):
+    """Merge-only fields for the family viewer app: HR + mood line from the primary phone (no lamp side-effects)."""
+
+    deviceId: str = Field(..., min_length=1, max_length=128)
+    reportedHeartRateBpm: float | None = Field(None, ge=30.0, le=230.0)
+    moodInsight: str | None = Field(None, max_length=500)
+
+
 def require_api_key(x_api_key: str | None) -> None:
     if not API_KEY:
         return
@@ -261,8 +269,55 @@ def pack_state(device_id: str, mood: str, reason: str, source: str) -> dict[str,
         "blinkBpm": bpm,
         "manualVisualLock": lock,
     }
+    _copy_viewer_fields_from_prev(prev, state)
     _STORE[device_id] = state
     return state
+
+
+def _ensure_device_row(device_id: str) -> dict[str, Any]:
+    """If no lamp state exists yet, seed calm defaults so viewer context can still be stored."""
+    if device_id in _STORE:
+        return _STORE[device_id]
+    return pack_manual(
+        device_id,
+        "calm",
+        DEFAULT_LAMP_BRIGHTNESS,
+        None,
+        power_on=True,
+        blink_enabled=False,
+        blink_bpm=72.0,
+        custom_label=None,
+    )
+
+
+def merge_viewer_context(
+    device_id: str,
+    *,
+    reported_hr: float | None,
+    mood_insight: str | None,
+) -> dict[str, Any]:
+    row = dict(_ensure_device_row(device_id))
+    now = time.time()
+    if reported_hr is not None:
+        row["reportedHeartRateBpm"] = float(reported_hr)
+        row["reportedHeartRateAt"] = now
+    if mood_insight is not None:
+        row["moodInsight"] = mood_insight.strip()[:500]
+    row["viewerContextUpdatedAt"] = now
+    _STORE[device_id] = row
+    return row
+
+
+VIEWER_CONTEXT_KEYS = frozenset(
+    {"reportedHeartRateBpm", "reportedHeartRateAt", "moodInsight", "viewerContextUpdatedAt"}
+)
+
+
+def _copy_viewer_fields_from_prev(prev: dict[str, Any], state: dict[str, Any]) -> None:
+    """Keep family-viewer telemetry when lamp state is rewritten by analyze/manual."""
+    for k in VIEWER_CONTEXT_KEYS:
+        if k in prev:
+            state[k] = prev[k]
 
 
 EXPLAIN_MOOD_SYSTEM = """JSON only: {"caption":"<one sentence ≤200 chars>"}
@@ -317,6 +372,7 @@ def pack_manual(
         "blinkBpm": bpm,
         "manualVisualLock": True,
     }
+    _copy_viewer_fields_from_prev(prev, state)
     _STORE[device_id] = state
     return state
 
@@ -779,6 +835,29 @@ async def explain_mood(
     return {"ok": True, "caption": caption}
 
 
+@app.post("/v1/cardiac/viewer-context")
+async def post_viewer_context(
+    body: ViewerContextBody,
+    x_api_key: str | None = Header(default=None, alias="x-api-key"),
+) -> dict[str, Any]:
+    """Primary phone pushes latest Health BPM and/or mood-insight text for the family viewer (does not change LED palette logic)."""
+    require_api_key(x_api_key)
+    if body.reportedHeartRateBpm is None and body.moodInsight is None:
+        raise HTTPException(status_code=400, detail="provide_reportedHeartRateBpm_and_or_moodInsight")
+    row = merge_viewer_context(
+        body.deviceId,
+        reported_hr=body.reportedHeartRateBpm,
+        mood_insight=body.moodInsight,
+    )
+    return {
+        "ok": True,
+        "reportedHeartRateBpm": row.get("reportedHeartRateBpm"),
+        "reportedHeartRateAt": row.get("reportedHeartRateAt"),
+        "moodInsight": row.get("moodInsight", ""),
+        "viewerContextUpdatedAt": row.get("viewerContextUpdatedAt"),
+    }
+
+
 @app.get("/v1/cardiac/latest")
 def latest(
     deviceId: str = Query(..., min_length=1),
@@ -788,7 +867,7 @@ def latest(
     row = _STORE.get(deviceId)
     if not row:
         raise HTTPException(status_code=404, detail="no_state_for_device")
-    return {
+    out: dict[str, Any] = {
         "mood": row["mood"],
         "label": row["label"],
         "color": row["color"],
@@ -798,5 +877,16 @@ def latest(
         "blinkEnabled": row.get("blinkEnabled", False),
         "blinkBpm": float(row.get("blinkBpm", 72.0)),
     }
+    if "reportedHeartRateBpm" in row and row["reportedHeartRateBpm"] is not None:
+        out["reportedHeartRateBpm"] = float(row["reportedHeartRateBpm"])
+    if "reportedHeartRateAt" in row and row["reportedHeartRateAt"] is not None:
+        out["reportedHeartRateAt"] = float(row["reportedHeartRateAt"])
+    # Include key whenever stored (even empty) so the family app decoder always sees mood lines when merged.
+    if "moodInsight" in row:
+        mi = row.get("moodInsight")
+        out["moodInsight"] = str(mi) if mi is not None else ""
+    if "viewerContextUpdatedAt" in row:
+        out["viewerContextUpdatedAt"] = float(row["viewerContextUpdatedAt"])
+    return out
 
 

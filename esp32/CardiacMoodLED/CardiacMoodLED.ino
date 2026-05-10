@@ -11,6 +11,8 @@
 #include <ArduinoJson.h>
 #include <FastLED.h>
 #include <math.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 #define CARDIAC_DEBUG 1
 
@@ -34,7 +36,6 @@ static const unsigned long WIFI_RETRY_MS = 10000;
 
 static CRGB leds[NUM_LEDS];
 static CRGB g_solid(20, 20, 30);
-static unsigned long lastFetch = 0;
 static unsigned long lastWifiAttempt = 0;
 static bool g_wifiUp = false;
 static bool g_lastFetchOk = false;
@@ -192,7 +193,9 @@ static bool fetchCardiac() {
   if (API_KEY[0] != '\0') {
     http.addHeader("x-api-key", API_KEY);
   }
-  http.setTimeout(4500);
+  // Cap wait so a slow cell/API does not stall the *fetch task* for many seconds.
+  // Main loop only renders LEDs; network runs on another task (no blink freeze).
+  http.setTimeout(2200);
   int code = http.GET();
   String body = http.getString();
   http.end();
@@ -241,6 +244,23 @@ static bool fetchCardiac() {
   return true;
 }
 
+/** Polls the API on core 0 so `loop()` can run `renderLeds()` without blocking on HTTPS. */
+static void fetchCardiacTask(void * /*param*/) {
+  unsigned long lastFetchTask = 0;
+  for (;;) {
+    if (!isPlaceholderCredentials() && WiFi.status() == WL_CONNECTED) {
+      unsigned long interval =
+          (g_blinkEnabled && g_powerOn) ? POLL_MS_BLINK : POLL_MS;
+      unsigned long now = millis();
+      if (now - lastFetchTask >= interval) {
+        lastFetchTask = now;
+        (void)fetchCardiac();
+      }
+    }
+    vTaskDelay(pdMS_TO_TICKS(8));
+  }
+}
+
 void setup() {
   Serial.begin(115200);
   delay(300);
@@ -255,7 +275,8 @@ void setup() {
     (void)tryConnectWifi();
   }
   lastWifiAttempt = millis();
-  lastFetch = 0;
+
+  xTaskCreatePinnedToCore(fetchCardiacTask, "cardiacFetch", 10240, nullptr, 1, nullptr, 0);
 }
 
 void loop() {
@@ -277,14 +298,7 @@ void loop() {
   }
   g_wifiUp = true;
 
-  unsigned long now = millis();
-  unsigned long interval = (g_blinkEnabled && g_powerOn) ? POLL_MS_BLINK : POLL_MS;
-  if (now - lastFetch >= interval) {
-    lastFetch = now;
-    if (!fetchCardiac()) {
-      Serial.println(F("fetch failed"));
-    }
-  }
-
+  // Network polling runs in `fetchCardiacTask` — this loop only drives LEDs (smooth blink).
   renderLeds();
+  delay(1);
 }

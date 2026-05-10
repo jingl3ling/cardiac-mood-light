@@ -27,9 +27,19 @@ final class MoodHub: NSObject, ObservableObject {
   @Published var blinkEnabled = false
   @Published var blinkBpm: Double = 72
 
+  /// When on, blink `/manual` + `/sync-blink` use this BPM instead of Apple Health (for testing).
+  @Published var testHeartbeatEnabled = false
+  @Published var testHeartbeatBpm: Double = 72
+
+  private static let udTestHeartbeatEnabled = "LittleLampTestHeartbeatEnabled"
+  private static let udTestHeartbeatBpm = "LittleLampTestHeartbeatBpm"
+
   /// Increments on each manual lamp request so slower responses cannot overwrite newer state.
   private var manualLampGeneration = 0
   private var moodInsightGeneration = 0
+
+  /// Debounce pushes to `/v1/cardiac/viewer-context` for the family viewer app.
+  private var viewerContextPushTask: Task<Void, Never>?
 
   /// After the user picks a mood tile, `/analyze` from Health must not leave the ESP on the HR-derived palette.
   private var lampFollowsManualTileSelection = false
@@ -64,7 +74,59 @@ final class MoodHub: NSObject, ObservableObject {
 
   override init() {
     super.init()
+    let d = UserDefaults.standard
+    testHeartbeatEnabled = d.bool(forKey: Self.udTestHeartbeatEnabled)
+    let storedBpm = d.double(forKey: Self.udTestHeartbeatBpm)
+    if storedBpm >= 30 && storedBpm <= 220 {
+      testHeartbeatBpm = storedBpm
+    }
     activateSessionIfNeeded()
+  }
+
+  func applyTestHeartbeatEnabled(_ enabled: Bool) {
+    testHeartbeatEnabled = enabled
+    UserDefaults.standard.set(enabled, forKey: Self.udTestHeartbeatEnabled)
+  }
+
+  func applyTestHeartbeatBpm(_ bpm: Double) {
+    let c = min(220.0, max(30.0, bpm))
+    testHeartbeatBpm = c
+    UserDefaults.standard.set(c, forKey: Self.udTestHeartbeatBpm)
+  }
+
+  private func scheduleViewerContextPush() {
+    viewerContextPushTask?.cancel()
+    viewerContextPushTask = Task {
+      try? await Task.sleep(nanoseconds: 1_500_000_000)
+      guard !Task.isCancelled else { return }
+      await flushViewerContextToServer()
+    }
+  }
+
+  /// BPM to show on the family app: test override, else Apple Health, else lamp blink rate (so something always syncs).
+  private func bpmForViewerContext() -> Double {
+    if testHeartbeatEnabled {
+      return min(220.0, max(30.0, testHeartbeatBpm))
+    }
+    if let hr = latestAppleHealthHeartRateBpm {
+      return min(220.0, max(30.0, hr))
+    }
+    return min(220.0, max(30.0, blinkBpm))
+  }
+
+  private func flushViewerContextToServer() async {
+    let hr = bpmForViewerContext()
+    let t = moodInsight.trimmingCharacters(in: .whitespacesAndNewlines)
+    let insightPayload = t.isEmpty ? nil : t
+    do {
+      try await api.postViewerContext(
+        deviceId: Config.deviceId,
+        reportedHeartRateBpm: hr,
+        moodInsight: insightPayload
+      )
+    } catch {
+      // Family sync is best-effort; lamp path already surfaced errors on manual/analyze.
+    }
   }
 
   private func activateSessionIfNeeded() {
@@ -99,6 +161,7 @@ final class MoodHub: NSObject, ObservableObject {
       latestAppleHealthHeartRateBpm = nil
       appleHealthHeartRateDetail = "Health not available on this device."
       healthSnapshotRestingBpm = nil
+      scheduleViewerContextPush()
       return
     }
 
@@ -141,6 +204,7 @@ final class MoodHub: NSObject, ObservableObject {
         }
       }
       await syncBlinkBpmFromLatestHealthAndPushIfNeeded()
+      scheduleViewerContextPush()
       return
     }
 
@@ -157,6 +221,7 @@ final class MoodHub: NSObject, ObservableObject {
         }
       }
       await syncBlinkBpmFromLatestHealthAndPushIfNeeded()
+      scheduleViewerContextPush()
       return
     }
 
@@ -173,6 +238,7 @@ final class MoodHub: NSObject, ObservableObject {
       }
     }
     await syncBlinkBpmFromLatestHealthAndPushIfNeeded()
+    scheduleViewerContextPush()
   }
 
   func ingestWatchPayload(_ userInfo: [String: Any]) async {
@@ -225,6 +291,22 @@ final class MoodHub: NSObject, ObservableObject {
 
   /// Blink BPM from Health — `/sync-blink` only so HR polling does not POST `/manual` and stall color updates.
   private func syncBlinkBpmFromLatestHealthAndPushIfNeeded() async {
+    if testHeartbeatEnabled {
+      blinkBpm = min(220.0, max(30.0, testHeartbeatBpm))
+      guard blinkEnabled else { return }
+      do {
+        let resp = try await api.syncBlink(
+          deviceId: Config.deviceId,
+          blinkBpm: blinkBpm,
+          blinkEnabled: blinkEnabled
+        )
+        applyAnalyzeResponse(resp)
+        lastError = ""
+      } catch {
+        lastError = String(describing: error)
+      }
+      return
+    }
     guard let hr = latestAppleHealthHeartRateBpm else { return }
     let clamped = min(220.0, max(30.0, hr))
     blinkBpm = clamped
@@ -242,8 +324,12 @@ final class MoodHub: NSObject, ObservableObject {
     }
   }
 
-  /// Blink rate follows Apple Health BPM when available; otherwise use the API response.
+  /// Blink rate: test override, then Apple Health, then API response.
   private func resolveBlinkBpm(from resp: AnalyzeResponseBody) {
+    if testHeartbeatEnabled {
+      blinkBpm = min(220.0, max(30.0, testHeartbeatBpm))
+      return
+    }
     if let hr = latestAppleHealthHeartRateBpm {
       blinkBpm = min(220.0, max(30.0, hr))
       return
@@ -317,6 +403,7 @@ final class MoodHub: NSObject, ObservableObject {
     if let v = resp.blinkEnabled { blinkEnabled = v }
     resolveBlinkBpm(from: resp)
     lastUpdatedText = DateFormatter.localizedString(from: Date(), dateStyle: .none, timeStyle: .medium)
+    scheduleViewerContextPush()
   }
 
   /// Call when the user selects a mood tile so HR classify cannot stick the lamp on the wrong palette.
@@ -375,9 +462,11 @@ final class MoodHub: NSObject, ObservableObject {
       )
       guard token == moodInsightGeneration else { return }
       moodInsight = caption
+      scheduleViewerContextPush()
     } catch {
       guard token == moodInsightGeneration else { return }
       moodInsight = Self.localFallbackInsight(mood: moodKey, customName: customUserMoodName)
+      scheduleViewerContextPush()
     }
   }
 
@@ -466,6 +555,9 @@ final class MoodHub: NSObject, ObservableObject {
     preserveInsightContext: Bool = false
   ) async {
     let effectiveBlink: Double = {
+      if testHeartbeatEnabled {
+        return min(220.0, max(30.0, testHeartbeatBpm))
+      }
       if let hr = latestAppleHealthHeartRateBpm {
         return min(220.0, max(30.0, hr))
       }
@@ -496,6 +588,7 @@ final class MoodHub: NSObject, ObservableObject {
       }
       applyAnalyzeResponse(resp)
       lastError = ""
+      scheduleViewerContextPush()
     } catch {
       guard token == manualLampGeneration else { return }
       lastError = String(describing: error)
