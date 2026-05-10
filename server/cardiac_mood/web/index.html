@@ -96,7 +96,17 @@
           </div>
           <div class="field" style="margin-top: 12px">
             <label for="customMoodName">Name this mood</label>
-            <input type="text" id="customMoodName" maxlength="48" placeholder="Optional label" />
+            <div style="display: flex; gap: 8px; align-items: center; margin-top: 6px">
+              <input
+                type="text"
+                id="customMoodName"
+                maxlength="48"
+                placeholder="Optional label"
+                style="flex: 1; min-width: 0"
+              />
+              <button type="button" class="btn-secondary" id="customMoodDone">Done</button>
+            </div>
+            <span class="hint" style="display: block; margin-top: 6px">Tap Done to update the mood line above (not while typing).</span>
           </div>
         </div>
       </section>

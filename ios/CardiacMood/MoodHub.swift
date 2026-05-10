@@ -134,6 +134,7 @@ final class MoodHub: NSObject, ObservableObject {
           lastHealthRestingAnalyzeKey = nil
         }
       }
+      await syncBlinkBpmFromLatestHealthAndPushIfNeeded()
       return
     }
 
@@ -149,6 +150,7 @@ final class MoodHub: NSObject, ObservableObject {
           lastHealthRestingAnalyzeKey = nil
         }
       }
+      await syncBlinkBpmFromLatestHealthAndPushIfNeeded()
       return
     }
 
@@ -164,6 +166,7 @@ final class MoodHub: NSObject, ObservableObject {
         }
       }
     }
+    await syncBlinkBpmFromLatestHealthAndPushIfNeeded()
   }
 
   func ingestWatchPayload(_ userInfo: [String: Any]) async {
@@ -186,7 +189,49 @@ final class MoodHub: NSObject, ObservableObject {
       timestamps = bpms.map { _ in now }
     }
 
-    _ = await runAnalyze(bpms: bpms, timestamps: timestamps)
+    let ok = await runAnalyze(bpms: bpms, timestamps: timestamps)
+    if ok, let last = bpms.last {
+      let c = min(220.0, max(30.0, last))
+      blinkBpm = c
+      await pushManualLamp(
+        mood: moodKeyForLampAPI(),
+        brightness: Int(min(255, max(0, lampBrightness.rounded()))),
+        colorHexOverride: optionalColorHexForLampSync(),
+        powerOn: lampPowerOn,
+        blinkEnabled: blinkEnabled,
+        blinkBpm: blinkBpm,
+        moodLabel: nil,
+        preserveInsightContext: true
+      )
+    }
+  }
+
+  private func moodKeyForLampAPI() -> String {
+    knownMoods.contains(lastMood) ? lastMood : "calm"
+  }
+
+  private func optionalColorHexForLampSync() -> String? {
+    let h = lastColorHex.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard h.hasPrefix("#"), h.count == 7 else { return nil }
+    return h
+  }
+
+  /// Blink BPM tracks “Latest from Health”; push lamp state without clearing HR insight context.
+  private func syncBlinkBpmFromLatestHealthAndPushIfNeeded() async {
+    guard let hr = latestAppleHealthHeartRateBpm else { return }
+    let clamped = min(220.0, max(30.0, hr))
+    guard abs(clamped - blinkBpm) >= 0.2 else { return }
+    blinkBpm = clamped
+    await pushManualLamp(
+      mood: moodKeyForLampAPI(),
+      brightness: Int(min(255, max(0, lampBrightness.rounded()))),
+      colorHexOverride: optionalColorHexForLampSync(),
+      powerOn: lampPowerOn,
+      blinkEnabled: blinkEnabled,
+      blinkBpm: blinkBpm,
+      moodLabel: nil,
+      preserveInsightContext: true
+    )
   }
 
   @discardableResult
@@ -291,9 +336,36 @@ final class MoodHub: NSObject, ObservableObject {
     return f.string(from: Date())
   }
 
+  /// Mirrors server `_label_likely_gibberish` so offline copy matches API fallback tone.
+  private static func customLabelLooksLikeGibberish(_ raw: String) -> Bool {
+    let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return false }
+    let letters = trimmed.filter { $0.isLetter }
+    guard letters.count >= 2 else { return true }
+    let low = String(letters).lowercased()
+    if low.count >= 2, Set(low).count == 1 { return true }
+    let vowelCount = low.filter { "aeiouy".contains($0) }.count
+    if low.count >= 4, vowelCount == 0 { return true }
+    if low.count >= 5, Double(vowelCount) / Double(low.count) < 0.12 { return true }
+    let alphaChars = trimmed.filter { $0.isLetter }
+    if alphaChars.count >= 5 {
+      let up = alphaChars.map { $0.isUppercase }
+      var transitions = 0
+      for i in 0..<(up.count - 1) where up[i] != up[i + 1] {
+        transitions += 1
+      }
+      if transitions >= max(3, Int(Double(up.count) * 0.4)) { return true }
+    }
+    return false
+  }
+
   private static func localFallbackInsight(mood: String, customName: String?) -> String {
     if let raw = customName?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty {
       let c = String(raw.prefix(48))
+      if customLabelLooksLikeGibberish(c) {
+        return
+          "I'm sure you feel this way for a certain reason—no need to put it into perfect words."
+      }
       let low = c.lowercased()
       if low.contains("scar") || low.contains("fear") || low.contains("afraid") || low.contains("panic") {
         return "For «\(c)»: sudden noise, shadows, or a racing mind can spike that feeling—the lamp keeps the edge soft."
@@ -304,7 +376,16 @@ final class MoodHub: NSObject, ObservableObject {
       if low.contains("peace") || low.contains("calm") || low.contains("relax") {
         return "For «\(c)»: slow breathing, a cozy corner, or winding down fits this light."
       }
-      return "For «\(c)»: little everyday sparks—people, news, or the hour—can tint how this mood lands."
+      let m = mood.lowercased()
+      let tail: String = {
+        switch m {
+        case "stressed": return "overload, deadlines, or a nervous system on high alert"
+        case "happy": return "good news, bright company, or plain relief today"
+        case "sad": return "a heavy hour, goodbyes, or quiet tiredness"
+        default: return "needing less noise, a slower breath, or a softer corner"
+        }
+      }()
+      return "If «\(c)» fits you, this \(m) light can echo \(tail)—take what resonates."
     }
     switch mood.lowercased() {
     case "stressed":
@@ -327,7 +408,8 @@ final class MoodHub: NSObject, ObservableObject {
     powerOn: Bool,
     blinkEnabled: Bool,
     blinkBpm: Double,
-    moodLabel: String?
+    moodLabel: String?,
+    preserveInsightContext: Bool = false
   ) async {
     manualLampGeneration += 1
     let token = manualLampGeneration
@@ -346,8 +428,10 @@ final class MoodHub: NSObject, ObservableObject {
         moodLabel: moodLabel
       )
       guard token == manualLampGeneration else { return }
-      insightRestingBpm = nil
-      insightRecentBpms = nil
+      if !preserveInsightContext {
+        insightRestingBpm = nil
+        insightRecentBpms = nil
+      }
       applyAnalyzeResponse(resp)
       lastError = ""
     } catch {

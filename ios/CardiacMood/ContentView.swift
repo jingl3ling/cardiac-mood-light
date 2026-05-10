@@ -41,6 +41,10 @@ struct ContentView: View {
   /// 0…1 hue for spectrum tint (saturation/brightness fixed for LED-friendly colors).
   @State private var spectrumHue: Double = 0
   @AppStorage("customMoodDisplayName") private var customMoodName = ""
+  /// Label passed to explain-mood only after the user taps Done (avoids captions while typing).
+  @AppStorage("customMoodInsightCommitted") private var committedInsightLabel = ""
+  @FocusState private var customMoodNameFieldFocused: Bool
+  @State private var didMigrateMoodInsightCommit = false
   @State private var debouncedLampTask: Task<Void, Never>?
 
   private var selectedPreset: MoodPreset {
@@ -194,11 +198,11 @@ struct ContentView: View {
         selectedMoodId = newVal
       }
     }
-    /// Explain-mood runs when mood selection, customize toggle, custom label, or server-evaluated mood (`lastMood`) changes — not on brightness-only edits.
-    .task(id: "\(selectedMoodId)|\(customColorEnabled)|\(customMoodName)|\(hub.lastMood)") {
+    /// Explain-mood runs when mood selection, customize toggle, committed custom label, or `lastMood` changes — not while typing the draft label.
+    .task(id: "\(selectedMoodId)|\(customColorEnabled)|\(committedInsightLabel)|\(hub.lastMood)") {
       await hub.refreshMoodInsight(
         selectedFallbackMood: selectedMoodId,
-        customUserMoodName: resolvedMoodLabelForAPI()
+        customUserMoodName: insightLabelForAPI()
       )
     }
     .onDisappear {
@@ -401,16 +405,39 @@ struct ContentView: View {
             .padding(.horizontal, 4)
         }
 
-        TextField("Name this mood", text: $customMoodName)
-          .textFieldStyle(.roundedBorder)
-          .font(.system(.body, design: .rounded))
-          .onChange(of: customMoodName) { _, newVal in
-            if newVal.count > 48 {
-              customMoodName = String(newVal.prefix(48))
+        HStack(alignment: .center, spacing: 10) {
+          TextField("Name this mood", text: $customMoodName)
+            .textFieldStyle(.roundedBorder)
+            .font(.system(.body, design: .rounded))
+            .focused($customMoodNameFieldFocused)
+            .submitLabel(.done)
+            .onSubmit {
+              commitCustomMoodInsightAndDismissKeyboard()
             }
-            guard customColorEnabled else { return }
-            scheduleLampSyncDebounced()
+            .onChange(of: customMoodName) { _, newVal in
+              if newVal.count > 48 {
+                customMoodName = String(newVal.prefix(48))
+              }
+              guard customColorEnabled else { return }
+              scheduleLampSyncDebounced()
+            }
+
+          Button("Done") {
+            commitCustomMoodInsightAndDismissKeyboard()
           }
+          .buttonStyle(.borderedProminent)
+          .tint(Color(red: 0.98, green: 0.45, blue: 0.62))
+          .font(.system(.body, design: .rounded).weight(.semibold))
+          .accessibilityLabel("Done naming mood")
+        }
+        .onAppear {
+          guard !didMigrateMoodInsightCommit else { return }
+          didMigrateMoodInsightCommit = true
+          let draft = customMoodName.trimmingCharacters(in: .whitespacesAndNewlines)
+          if committedInsightLabel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !draft.isEmpty {
+            committedInsightLabel = String(draft.prefix(48))
+          }
+        }
       }
     }
   }
@@ -517,11 +544,26 @@ struct ContentView: View {
     .buttonStyle(.plain)
   }
 
+  /// Draft label for lamp `/manual` (updates while typing).
   private func resolvedMoodLabelForAPI() -> String? {
     guard customColorEnabled else { return nil }
     let t = customMoodName.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !t.isEmpty else { return nil }
     return String(t.prefix(48))
+  }
+
+  /// Committed label for explain-mood only (after Done).
+  private func insightLabelForAPI() -> String? {
+    guard customColorEnabled else { return nil }
+    let t = committedInsightLabel.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !t.isEmpty else { return nil }
+    return String(t.prefix(48))
+  }
+
+  private func commitCustomMoodInsightAndDismissKeyboard() {
+    let t = customMoodName.trimmingCharacters(in: .whitespacesAndNewlines)
+    committedInsightLabel = String(t.prefix(48))
+    customMoodNameFieldFocused = false
   }
 
   private func colorHexForAPI() -> String? {

@@ -251,7 +251,8 @@ def pack_state(device_id: str, mood: str, reason: str, source: str) -> dict[str,
 EXPLAIN_MOOD_SYSTEM = """JSON only: {"caption":"<one sentence ≤200 chars>"}
 Keys: m=base mood (calm|stressed|happy|sad, lamp palette only); n=authoritative local now—use n only for weekday/time; never contradict n.
 h=null or {r,b,c,s} HR compact. No diagnoses.
-u=optional user mood name (their word). If u is set: caption MUST match u's emotion—e.g. scared/fearful→reasons like tension, surprises, darkness, worry; peaceful→quiet wind-down; joyful→bright moments. Never give calm/peaceful evening copy when u implies fear or panic. If u empty: tone follows m and n.
+u=optional user mood name (their word). uf=1 means u reads like a real feeling/word; uf=0 means u looks like random typing—do NOT invent causes (no people/weather/news filler); write one warm sentence that their feeling is valid without guessing why, e.g. that it's okay not to name it perfectly.
+If uf=1 and u set: caption MUST match u's emotion—e.g. scared/fearful→tension, surprises, darkness, worry; peaceful→quiet wind-down; joyful→bright moments. Never give calm/peaceful evening copy when u implies fear or panic. If u empty: tone follows m and n.
 Blend HR (h) with n when present; keep one sentence. Plain text, no markdown."""
 
 
@@ -325,9 +326,39 @@ def _everyday_context_fragment(local_date: str, mood: str) -> str:
     return f"{mood_line} — maybe {extra}, or whatever your day's weather feels like"
 
 
-def _fallback_emotional_hint_for_custom_label(label: str) -> str:
+def _label_likely_gibberish(label: str) -> bool:
+    """Heuristic: keyboard mash / random letters—not for judging real rare words."""
+    raw = label.strip()
+    if not raw:
+        return False
+    letters = "".join(ch for ch in raw if ch.isalpha())
+    if len(letters) < 2:
+        return True
+    low = letters.lower()
+    if len(low) >= 2 and len(set(low)) == 1:
+        return True
+    vowels = sum(1 for c in low if c in "aeiouy")
+    if len(low) >= 4 and vowels == 0:
+        return True
+    if len(low) >= 5 and (vowels / len(low)) < 0.12:
+        return True
+    alpha_chars = [c for c in raw if c.isalpha()]
+    if len(alpha_chars) >= 5:
+        up = [c.isupper() for c in alpha_chars]
+        transitions = sum(1 for i in range(len(up) - 1) if up[i] != up[i + 1])
+        if transitions >= max(3, int(len(up) * 0.4)):
+            return True
+    return False
+
+
+def _gibberish_custom_label_caption() -> str:
+    return "I'm sure you feel this way for a certain reason—no need to put it into perfect words."
+
+
+def _fallback_emotional_hint_for_custom_label(label: str, mood: str) -> str:
     """Tiny heuristic line so offline copy still tracks the user's word."""
     low = label.lower()
+    m = mood.lower().strip()
     if any(x in low for x in ("scar", "fear", "afraid", "panic", "terror", "fright")):
         return "Shadows, sudden noise, or a racing mind can stir that feeling—let the light stay gentle."
     if any(x in low for x in ("angry", "rage", "mad", "furious")):
@@ -340,7 +371,13 @@ def _fallback_emotional_hint_for_custom_label(label: str) -> str:
         return "Slow breathing, a cozy corner, or wind-down time fits this hue."
     if any(x in low for x in ("stress", "worried", "anxious", "tense")):
         return "Deadlines, pings, or what-ifs can wind you tight—small rituals and dim warmth help."
-    return "Tiny everyday sparks—people, weather, news—can tint how this mood lands."
+    tail = {
+        "calm": "needing less noise, a slower breath, or a softer corner",
+        "stressed": "overload, deadlines, or a nervous system on high alert",
+        "happy": "good news, bright company, or plain relief today",
+        "sad": "a heavy hour, goodbyes, or quiet tiredness",
+    }.get(m, "what you're carrying today")
+    return f"If «{label}» fits you, this {m} light can echo {tail}—take what resonates."
 
 
 def _fallback_explain_caption(
@@ -369,7 +406,12 @@ def _fallback_explain_caption(
         hr_part = f"Your pulse pattern looked {cr}"
 
     if cu:
-        label_hint = _fallback_emotional_hint_for_custom_label(cu)
+        if _label_likely_gibberish(cu):
+            gib = _gibberish_custom_label_caption()
+            if hr_part:
+                return f"{hr_part} — {gib}"
+            return gib
+        label_hint = _fallback_emotional_hint_for_custom_label(cu, mood)
         mid = f"For «{cu}»: {label_hint}"
         if hr_part:
             return f"{hr_part} — {mid} — {everyday}"
@@ -631,8 +673,10 @@ async def explain_mood(
         "n": now_ctx["one_liner"],
         "h": h_compact,
     }
-    if body.customMoodName:
-        payload_user["u"] = body.customMoodName[:48]
+    cu_in = (body.customMoodName or "").strip()[:48]
+    if cu_in:
+        payload_user["u"] = cu_in
+        payload_user["uf"] = 0 if _label_likely_gibberish(cu_in) else 1
 
     caption = ""
     if ANTHROPIC_API_KEY:

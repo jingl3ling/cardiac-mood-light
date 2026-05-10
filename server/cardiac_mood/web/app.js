@@ -5,6 +5,7 @@
     deviceId: "littleLampDeviceId",
     appearance: "littleLampAppearance",
     fixedAppearance: "littleLampFixedAppearance",
+    moodInsightCommitted: "littleLampMoodInsightCommitted",
   };
 
   const PRESETS = [
@@ -25,6 +26,7 @@
     customColorEnabled: false,
     spectrumHue: 0,
     customMoodName: "",
+    customMoodInsightCommitted: "",
     lastMood: "—",
     lastLabel: "—",
     lastReason: "",
@@ -209,6 +211,35 @@
     return t ? t.slice(0, 48) : null;
   }
 
+  /** Committed label for explain-mood only (after Done). */
+  function moodLabelForInsightAPI() {
+    if (!state.customColorEnabled) return null;
+    const t = state.customMoodInsightCommitted.trim();
+    return t ? t.slice(0, 48) : null;
+  }
+
+  function labelLikelyGibberish(label) {
+    const raw = String(label || "").trim();
+    if (!raw) return false;
+    const letters = [...raw].filter((ch) => /[A-Za-z]/.test(ch)).join("");
+    if (letters.length < 2) return true;
+    const low = letters.toLowerCase();
+    if (low.length >= 2 && new Set(low).size === 1) return true;
+    const vowels = [...low].filter((c) => "aeiouy".includes(c)).length;
+    if (low.length >= 4 && vowels === 0) return true;
+    if (low.length >= 5 && vowels / low.length < 0.12) return true;
+    const alphaChars = [...raw].filter((ch) => /[A-Za-z]/.test(ch));
+    if (alphaChars.length >= 5) {
+      const up = alphaChars.map((c) => c === c.toUpperCase() && c !== c.toLowerCase());
+      let transitions = 0;
+      for (let i = 0; i < up.length - 1; i++) {
+        if (up[i] !== up[i + 1]) transitions += 1;
+      }
+      if (transitions >= Math.max(3, Math.floor(up.length * 0.4))) return true;
+    }
+    return false;
+  }
+
   function updatePreviewUI() {
     const hex = previewHex();
     const on = state.lampPowerOn;
@@ -337,17 +368,28 @@
   function localFallbackInsight(mood, customName) {
     const c = customName && String(customName).trim();
     if (c) {
+      const clip = c.slice(0, 48);
+      if (labelLikelyGibberish(clip)) {
+        return "I'm sure you feel this way for a certain reason—no need to put it into perfect words.";
+      }
       const low = c.toLowerCase();
       if (/scar|fear|afraid|panic/.test(low)) {
-        return `For «${c.slice(0, 48)}»: sudden noise, shadows, or a racing mind can spike that feeling—the lamp keeps the edge soft.`;
+        return `For «${clip}»: sudden noise, shadows, or a racing mind can spike that feeling—the lamp keeps the edge soft.`;
       }
       if (/anger|rage|mad|furious/.test(low)) {
-        return `For «${c.slice(0, 48)}»: friction, unfair surprises, or tight deadlines often fan the heat—breathe with the glow.`;
+        return `For «${clip}»: friction, unfair surprises, or tight deadlines often fan the heat—breathe with the glow.`;
       }
       if (/peace|calm|relax/.test(low)) {
-        return `For «${c.slice(0, 48)}»: slow breathing, a cozy corner, or winding down fits this light.`;
+        return `For «${clip}»: slow breathing, a cozy corner, or winding down fits this light.`;
       }
-      return `For «${c.slice(0, 48)}»: little everyday sparks—people, news, or the hour—can tint how this mood lands.`;
+      const m = String(mood || "calm").toLowerCase();
+      const tail =
+        {
+          stressed: "overload, deadlines, or a nervous system on high alert",
+          happy: "good news, bright company, or plain relief today",
+          sad: "a heavy hour, goodbyes, or quiet tiredness",
+        }[m] || "needing less noise, a slower breath, or a softer corner";
+      return `If «${clip}» fits you, this ${m} light can echo ${tail}—take what resonates.`;
     }
     const map = {
       stressed:
@@ -391,7 +433,7 @@
       state.insightRecentBpms = null;
       applyAnalyzeResponse(resp);
       if (moodChangedForInsight(prevMood, resp.mood)) {
-        await refreshMoodInsight(mood, moodLabelForAPI());
+        await refreshMoodInsight(mood, moodLabelForInsightAPI());
       }
     } catch (e) {
       if (token !== state.manualGen) return;
@@ -467,6 +509,7 @@
 
   /** ---------- Init ---------- */
   loadSettings();
+  state.customMoodInsightCommitted = localStorage.getItem(STORAGE.moodInsightCommitted) ?? "";
 
   $("baseUrl").addEventListener("change", saveSettings);
   $("apiKey").addEventListener("change", saveSettings);
@@ -517,6 +560,7 @@
     }
     updatePreviewUI();
     syncLampImmediate();
+    refreshMoodInsight(state.selectedMoodId, moodLabelForInsightAPI());
   });
 
   $("spectrumHue").addEventListener("input", (e) => {
@@ -528,6 +572,14 @@
   $("customMoodName").addEventListener("input", () => {
     updatePreviewUI();
     scheduleLampSyncDebounced();
+  });
+
+  $("customMoodDone").addEventListener("click", () => {
+    const t = $("customMoodName").value.trim().slice(0, 48);
+    state.customMoodInsightCommitted = t;
+    localStorage.setItem(STORAGE.moodInsightCommitted, t);
+    $("customMoodName").blur();
+    refreshMoodInsight(state.selectedMoodId, moodLabelForInsightAPI());
   });
 
   $("fixedAppearance").addEventListener("change", (e) => {
@@ -604,5 +656,10 @@
   updatePreviewUI();
 
   syncLampImmediate();
-  refreshMoodInsight(state.selectedMoodId, moodLabelForAPI());
+  const draftInit = $("customMoodName").value.trim();
+  if (!state.customMoodInsightCommitted && draftInit) {
+    state.customMoodInsightCommitted = draftInit.slice(0, 48);
+    localStorage.setItem(STORAGE.moodInsightCommitted, state.customMoodInsightCommitted);
+  }
+  refreshMoodInsight(state.selectedMoodId, moodLabelForInsightAPI());
 })();
