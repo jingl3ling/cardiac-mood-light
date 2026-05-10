@@ -41,8 +41,8 @@ DEFAULT_LAMP_BRIGHTNESS = 120
 # Fixed palette — server assigns; Claude only picks mood id.
 STYLE: dict[str, dict[str, Any]] = {
     "calm": {"label": "Calm (baseline)", "color": "#FFD700", "brightness": DEFAULT_LAMP_BRIGHTNESS},
-    "stressed": {"label": "Escalating / Stressed", "color": "#FF0000", "brightness": DEFAULT_LAMP_BRIGHTNESS},
-    "happy": {"label": "Happy / Energetic", "color": "#FF69B4", "brightness": DEFAULT_LAMP_BRIGHTNESS},
+    "stressed": {"label": "Escalating / Stressed", "color": "#C62828", "brightness": DEFAULT_LAMP_BRIGHTNESS},
+    "happy": {"label": "Happy / Energetic", "color": "#FFB3D9", "brightness": DEFAULT_LAMP_BRIGHTNESS},
     "sad": {"label": "Sad / Drained", "color": "#4169E1", "brightness": DEFAULT_LAMP_BRIGHTNESS},
 }
 
@@ -121,7 +121,11 @@ class ManualLampBody(BaseModel):
 
 
 class SyncBlinkBody(BaseModel):
+<<<<<<< HEAD
     """Update blink fields only — does not change stored color (see `/manual` + manualVisualLock)."""
+=======
+    """Update blink BPM only — does not rewrite lamp color/label (avoids racing `/manual`)."""
+>>>>>>> 7bf6255 (works with having to enable customize mood to change color and blinking speed incorrect, will need to do more modifications)
 
     deviceId: str = Field(..., min_length=1, max_length=128)
     blinkBpm: float = Field(..., ge=30.0, le=220.0)
@@ -669,7 +673,11 @@ async def sync_blink(
     body: SyncBlinkBody,
     x_api_key: str | None = Header(default=None, alias="x-api-key"),
 ) -> dict[str, Any]:
+<<<<<<< HEAD
     """Heartbeat BPM for ESP — does not rewrite lamp color/mood."""
+=======
+    """Heartbeat BPM for ESP — does not change stored color, brightness, or label."""
+>>>>>>> 7bf6255 (works with having to enable customize mood to change color and blinking speed incorrect, will need to do more modifications)
     require_api_key(x_api_key)
     bpm = max(30.0, min(220.0, float(body.blinkBpm)))
     row = _STORE.get(body.deviceId)

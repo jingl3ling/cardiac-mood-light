@@ -11,14 +11,18 @@ private struct MoodPreset: Identifiable {
 
 private let moodPresets: [MoodPreset] = [
   MoodPreset(id: "calm", title: "Calm", hex: "#FFD700", symbol: "leaf.fill"),
-  MoodPreset(id: "stressed", title: "Stressed", hex: "#FF0000", symbol: "bolt.heart.fill"),
-  MoodPreset(id: "happy", title: "Happy", hex: "#FF69B4", symbol: "sun.max.fill"),
+  MoodPreset(id: "stressed", title: "Stressed", hex: "#C62828", symbol: "bolt.heart.fill"),
+  MoodPreset(id: "happy", title: "Happy", hex: "#FFB3D9", symbol: "sun.max.fill"),
   MoodPreset(id: "sad", title: "Sad", hex: "#4169E1", symbol: "cloud.rain.fill"),
 ]
 
 private let validMoods = Set(moodPresets.map(\.id))
 
+<<<<<<< HEAD
 private let lampSyncDebounceNs: UInt64 = 100_000_000
+=======
+private let lampSyncDebounceNs: UInt64 = 8_000_000
+>>>>>>> 7bf6255 (works with having to enable customize mood to change color and blinking speed incorrect, will need to do more modifications)
 
 private enum AppearancePreference: String, CaseIterable, Identifiable {
   case system
@@ -41,10 +45,6 @@ struct ContentView: View {
   /// 0…1 hue for spectrum tint (saturation/brightness fixed for LED-friendly colors).
   @State private var spectrumHue: Double = 0
   @AppStorage("customMoodDisplayName") private var customMoodName = ""
-  /// Label passed to explain-mood only after the user taps Done (avoids captions while typing).
-  @AppStorage("customMoodInsightCommitted") private var committedInsightLabel = ""
-  @FocusState private var customMoodNameFieldFocused: Bool
-  @State private var didMigrateMoodInsightCommit = false
   @State private var debouncedLampTask: Task<Void, Never>?
 
   private var selectedPreset: MoodPreset {
@@ -58,15 +58,9 @@ struct ContentView: View {
     return selectedPreset.hex
   }
 
+  /// Big title matches the mood tiles (Calm / Stressed / Happy / Sad), not optional custom names or server labels.
   private var headlineTitle: String {
-    if customColorEnabled {
-      let t = customMoodName.trimmingCharacters(in: .whitespacesAndNewlines)
-      if !t.isEmpty { return t }
-    }
-    if hub.lastLabel != "—" {
-      return hub.lastLabel
-    }
-    return selectedPreset.title
+    selectedPreset.title
   }
 
   private var spectrumHueBinding: Binding<Double> {
@@ -198,11 +192,10 @@ struct ContentView: View {
         selectedMoodId = newVal
       }
     }
-    /// Explain-mood runs when mood selection, customize toggle, committed custom label, or `lastMood` changes — not while typing the draft label.
-    .task(id: "\(selectedMoodId)|\(customColorEnabled)|\(committedInsightLabel)|\(hub.lastMood)") {
+    .task(id: "\(selectedMoodId)|\(customColorEnabled)|\(customMoodName)|\(hub.lastMood)") {
       await hub.refreshMoodInsight(
         selectedFallbackMood: selectedMoodId,
-        customUserMoodName: insightLabelForAPI()
+        customUserMoodName: resolvedMoodLabelForAPI()
       )
     }
     .onDisappear {
@@ -356,11 +349,6 @@ struct ContentView: View {
         ProgressView()
           .padding(.top, 4)
       }
-      if !hub.lastError.isEmpty {
-        Text(hub.lastError)
-          .font(.system(.caption, design: .rounded))
-          .foregroundStyle(.red)
-      }
     }
   }
 
@@ -419,7 +407,6 @@ struct ContentView: View {
         if enabled {
           spectrumHue = hueFromPresetHex(selectedPreset.hex)
         }
-        syncLampImmediate()
       }
 
       if customColorEnabled {
@@ -449,39 +436,16 @@ struct ContentView: View {
             .padding(.horizontal, 4)
         }
 
-        HStack(alignment: .center, spacing: 10) {
-          TextField("Name this mood", text: $customMoodName)
-            .textFieldStyle(.roundedBorder)
-            .font(.system(.body, design: .rounded))
-            .focused($customMoodNameFieldFocused)
-            .submitLabel(.done)
-            .onSubmit {
-              commitCustomMoodInsightAndDismissKeyboard()
+        TextField("Name this mood (optional)", text: $customMoodName)
+          .textFieldStyle(.roundedBorder)
+          .font(.system(.body, design: .rounded))
+          .onChange(of: customMoodName) { _, newVal in
+            if newVal.count > 48 {
+              customMoodName = String(newVal.prefix(48))
             }
-            .onChange(of: customMoodName) { _, newVal in
-              if newVal.count > 48 {
-                customMoodName = String(newVal.prefix(48))
-              }
-              guard customColorEnabled else { return }
-              scheduleLampSyncDebounced()
-            }
-
-          Button("Done") {
-            commitCustomMoodInsightAndDismissKeyboard()
+            guard customColorEnabled else { return }
+            scheduleLampSyncDebounced()
           }
-          .buttonStyle(.borderedProminent)
-          .tint(Color(red: 0.98, green: 0.45, blue: 0.62))
-          .font(.system(.body, design: .rounded).weight(.semibold))
-          .accessibilityLabel("Done naming mood")
-        }
-        .onAppear {
-          guard !didMigrateMoodInsightCommit else { return }
-          didMigrateMoodInsightCommit = true
-          let draft = customMoodName.trimmingCharacters(in: .whitespacesAndNewlines)
-          if committedInsightLabel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !draft.isEmpty {
-            committedInsightLabel = String(draft.prefix(48))
-          }
-        }
       }
     }
   }
@@ -507,15 +471,7 @@ struct ContentView: View {
     debouncedLampTask = Task {
       try? await Task.sleep(nanoseconds: lampSyncDebounceNs)
       guard !Task.isCancelled else { return }
-      await hub.pushManualLamp(
-        mood: selectedMoodId,
-        brightness: Int(hub.lampBrightness.rounded()),
-        colorHexOverride: colorHexForAPI(),
-        powerOn: hub.lampPowerOn,
-        blinkEnabled: hub.blinkEnabled,
-        blinkBpm: hub.blinkBpm,
-        moodLabel: resolvedMoodLabelForAPI()
-      )
+      await pushLampFromControls()
     }
   }
 
@@ -523,16 +479,21 @@ struct ContentView: View {
     debouncedLampTask?.cancel()
     debouncedLampTask = nil
     Task {
-      await hub.pushManualLamp(
-        mood: selectedMoodId,
-        brightness: Int(hub.lampBrightness.rounded()),
-        colorHexOverride: colorHexForAPI(),
-        powerOn: hub.lampPowerOn,
-        blinkEnabled: hub.blinkEnabled,
-        blinkBpm: hub.blinkBpm,
-        moodLabel: resolvedMoodLabelForAPI()
-      )
+      await pushLampFromControls()
     }
+  }
+
+  private func pushLampFromControls() async {
+    hub.syncPinnedPayloadFromUI(colorHex: colorHexForAPI(), moodLabel: resolvedMoodLabelForAPI())
+    await hub.pushManualLamp(
+      mood: selectedMoodId,
+      brightness: Int(hub.lampBrightness.rounded()),
+      colorHexOverride: colorHexForAPI(),
+      powerOn: hub.lampPowerOn,
+      blinkEnabled: hub.blinkEnabled,
+      blinkBpm: hub.blinkBpm,
+      moodLabel: resolvedMoodLabelForAPI()
+    )
   }
 
   @ViewBuilder
@@ -544,10 +505,12 @@ struct ContentView: View {
 
     Button {
       hub.clearInsightHeartContextForManualSelection()
+      customMoodName = ""
       selectedMoodId = preset.id
       if customColorEnabled {
         spectrumHue = hueFromPresetHex(preset.hex)
       }
+      hub.activateManualMoodPin(moodId: preset.id)
       syncLampImmediate()
     } label: {
       VStack(alignment: .leading, spacing: 10) {
@@ -594,20 +557,6 @@ struct ContentView: View {
     let t = customMoodName.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !t.isEmpty else { return nil }
     return String(t.prefix(48))
-  }
-
-  /// Committed label for explain-mood only (after Done).
-  private func insightLabelForAPI() -> String? {
-    guard customColorEnabled else { return nil }
-    let t = committedInsightLabel.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !t.isEmpty else { return nil }
-    return String(t.prefix(48))
-  }
-
-  private func commitCustomMoodInsightAndDismissKeyboard() {
-    let t = customMoodName.trimmingCharacters(in: .whitespacesAndNewlines)
-    committedInsightLabel = String(t.prefix(48))
-    customMoodNameFieldFocused = false
   }
 
   private func colorHexForAPI() -> String? {

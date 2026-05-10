@@ -31,6 +31,12 @@ final class MoodHub: NSObject, ObservableObject {
   private var manualLampGeneration = 0
   private var moodInsightGeneration = 0
 
+  /// After the user picks a mood tile, `/analyze` from Health must not leave the ESP on the HR-derived palette.
+  private var lampFollowsManualTileSelection = false
+  private var pinnedManualMoodId = "calm"
+  private var pinnedColorHex: String?
+  private var pinnedMoodLabel: String?
+
   /// Last watch/analyze window — sent to explain-mood when present (cleared on manual lamp / mood tile pick).
   private var insightRestingBpm: Double?
   private var insightRecentBpms: [Double]?
@@ -170,6 +176,7 @@ final class MoodHub: NSObject, ObservableObject {
   }
 
   func ingestWatchPayload(_ userInfo: [String: Any]) async {
+    lampFollowsManualTileSelection = false
     lastError = ""
     guard let bpmsUntyped = userInfo["bpms"] as? [Any] else {
       lastError = "missing bpms"
@@ -216,6 +223,7 @@ final class MoodHub: NSObject, ObservableObject {
     return h
   }
 
+<<<<<<< HEAD
   /// Blink BPM from Health — uses `/sync-blink` only so we never POST `/manual` without a color and reset the lamp palette.
   private func syncBlinkBpmFromLatestHealthAndPushIfNeeded() async {
     guard let hr = latestAppleHealthHeartRateBpm else { return }
@@ -224,6 +232,14 @@ final class MoodHub: NSObject, ObservableObject {
     blinkBpm = clamped
     let delta = abs(clamped - prev)
     guard blinkEnabled || delta >= 0.2 else { return }
+=======
+  /// Blink BPM from Health — `/sync-blink` only so HR polling does not POST `/manual` and stall color updates.
+  private func syncBlinkBpmFromLatestHealthAndPushIfNeeded() async {
+    guard let hr = latestAppleHealthHeartRateBpm else { return }
+    let clamped = min(220.0, max(30.0, hr))
+    blinkBpm = clamped
+    guard blinkEnabled else { return }
+>>>>>>> 7bf6255 (works with having to enable customize mood to change color and blinking speed incorrect, will need to do more modifications)
     do {
       let resp = try await api.syncBlink(
         deviceId: Config.deviceId,
@@ -235,6 +251,20 @@ final class MoodHub: NSObject, ObservableObject {
     } catch {
       lastError = String(describing: error)
     }
+<<<<<<< HEAD
+=======
+  }
+
+  /// Blink animation rate follows Apple Health BPM whenever we have a reading; otherwise fall back to the API response.
+  private func resolveBlinkBpm(from resp: AnalyzeResponseBody) {
+    if let hr = latestAppleHealthHeartRateBpm {
+      blinkBpm = min(220.0, max(30.0, hr))
+      return
+    }
+    if let v = resp.blinkBpm {
+      blinkBpm = min(220, max(30, v))
+    }
+>>>>>>> 7bf6255 (works with having to enable customize mood to change color and blinking speed incorrect, will need to do more modifications)
   }
 
   @discardableResult
@@ -268,6 +298,28 @@ final class MoodHub: NSObject, ObservableObject {
   }
 
   func applyAnalyzeResponse(_ resp: AnalyzeResponseBody) {
+    let fromManualEndpoint = (resp.source == "manual")
+    if lampFollowsManualTileSelection && !fromManualEndpoint {
+      insightClassifierReason = resp.reason
+      lastAnalyzeSource = resp.source ?? ""
+      if let v = resp.blinkEnabled { blinkEnabled = v }
+      if let v = resp.powerOn { lampPowerOn = v }
+      resolveBlinkBpm(from: resp)
+      Task {
+        await pushManualLamp(
+          mood: pinnedManualMoodId,
+          brightness: Int(min(255, max(0, lampBrightness.rounded()))),
+          colorHexOverride: pinnedColorHex,
+          powerOn: lampPowerOn,
+          blinkEnabled: blinkEnabled,
+          blinkBpm: blinkBpm,
+          moodLabel: pinnedMoodLabel,
+          preserveInsightContext: true
+        )
+      }
+      return
+    }
+
     lastMood = resp.mood
     lastLabel = resp.label ?? resp.mood
     lastColorHex = resp.color
@@ -277,8 +329,21 @@ final class MoodHub: NSObject, ObservableObject {
     lampBrightness = Double(resp.brightness)
     if let v = resp.powerOn { lampPowerOn = v }
     if let v = resp.blinkEnabled { blinkEnabled = v }
-    if let v = resp.blinkBpm { blinkBpm = min(220, max(30, v)) }
+    resolveBlinkBpm(from: resp)
     lastUpdatedText = DateFormatter.localizedString(from: Date(), dateStyle: .none, timeStyle: .medium)
+  }
+
+  /// Call when the user selects a mood tile so HR classify cannot stick the lamp on the wrong palette.
+  func activateManualMoodPin(moodId: String) {
+    lampFollowsManualTileSelection = true
+    pinnedManualMoodId = moodId
+  }
+
+  /// Snapshot UI-driven overrides for re-pushes after `/analyze` stomps server state.
+  func syncPinnedPayloadFromUI(colorHex: String?, moodLabel: String?) {
+    guard lampFollowsManualTileSelection else { return }
+    pinnedColorHex = colorHex
+    pinnedMoodLabel = moodLabel
   }
 
   /// Clears Watch/analyze HR context when the user picks a mood tile so explanations switch to everyday hints until the next analyze.
@@ -410,15 +475,23 @@ final class MoodHub: NSObject, ObservableObject {
     colorHexOverride: String?,
     powerOn: Bool,
     blinkEnabled: Bool,
-    blinkBpm: Double,
+    blinkBpm requestedBlinkBpm: Double,
     moodLabel: String?,
     preserveInsightContext: Bool = false
   ) async {
+    let effectiveBlink: Double = {
+      if let hr = latestAppleHealthHeartRateBpm {
+        return min(220.0, max(30.0, hr))
+      }
+      return min(220.0, max(30.0, requestedBlinkBpm))
+    }()
+    blinkBpm = effectiveBlink
+
     manualLampGeneration += 1
     let token = manualLampGeneration
 
     let b = min(255, max(0, brightness))
-    let bpmClamped = min(220, max(30, blinkBpm))
+    let bpmClamped = min(220.0, max(30.0, effectiveBlink))
     do {
       let resp = try await api.manualLamp(
         deviceId: Config.deviceId,

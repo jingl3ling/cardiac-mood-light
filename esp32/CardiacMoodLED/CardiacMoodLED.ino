@@ -27,8 +27,12 @@ static const char *API_KEY = "dev-change-me";
 
 static const int LED_PIN = 13;
 static const int NUM_LEDS = 8;
+<<<<<<< HEAD
 static const unsigned long POLL_MS = 1200;
 static const unsigned long POLL_MS_BLINK = 400;
+=======
+static const unsigned long POLL_MS = 700;
+>>>>>>> 7bf6255 (works with having to enable customize mood to change color and blinking speed incorrect, will need to do more modifications)
 static const unsigned long WIFI_TIMEOUT_MS = 30000;
 static const unsigned long WIFI_RETRY_MS = 10000;
 
@@ -115,6 +119,7 @@ static void renderLeds() {
     // One heartbeat per full cycle (matches BPM from phone / Health → GET latest → blinkBpm).
     float periodMs = 60000.0f / bpm;
     float phase = fmodf((float)millis(), periodMs) / periodMs;
+<<<<<<< HEAD
     bool lightHalf = phase < 0.5f;
 
     int hi = g_masterBrightness;
@@ -126,6 +131,13 @@ static void renderLeds() {
     if (lo >= hi) lo = hi / 4;
 
     int b = lightHalf ? hi : lo;
+=======
+    float norm = (sinf(phase * 2.0f * (float)M_PI) + 1.0f) * 0.5f;
+    // Raised sine: most of the beat stays dim, peak is short — a full-period sine fade reads very slow.
+    float pulse = powf(norm, 5.0f);
+    int minB = 10;
+    int b = minB + (int)(pulse * (float)(g_masterBrightness - minB));
+>>>>>>> 7bf6255 (works with having to enable customize mood to change color and blinking speed incorrect, will need to do more modifications)
     if (b < 0) b = 0;
     if (b > 255) b = 255;
     fill_solid(leds, NUM_LEDS, g_solid);
