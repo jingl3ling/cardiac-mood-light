@@ -101,7 +101,12 @@ final class WorkoutHeartBuffer: NSObject, ObservableObject {
     if !force && now.timeIntervalSince(lastFlush) < Config.flushSeconds {
       return
     }
-    guard readings.count >= 3 else { return }
+    // Live workout: wait for a few beats before sending so `/analyze` sees a window when possible.
+    // Forced flush (full buffer or session end) may send 1+ samples — server handles single BPM too.
+    if !force && readings.count < 3 {
+      return
+    }
+    guard readings.count >= 1 else { return }
 
     let slice = readings.suffix(Config.windowSize)
     let dates = slice.map(\.0)

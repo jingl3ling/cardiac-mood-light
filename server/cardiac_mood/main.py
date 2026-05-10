@@ -32,16 +32,20 @@ app = FastAPI(title="Cardiac Mood Light", version="1.0.0")
 
 API_KEY = os.environ.get("API_KEY", "").strip()
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "").strip()
-CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-20250514")
+# Default to Haiku for classify + explain-mood cost; override with CLAUDE_MODEL for Sonnet etc.
+CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "claude-3-5-haiku-20241022")
 
 MOODS = frozenset({"calm", "stressed", "happy", "sad"})
 
+# Default LED brightness (0–255) for mood/analyze until the user sets it from the app slider (`/manual`).
+DEFAULT_LAMP_BRIGHTNESS = 120
+
 # Fixed palette — server assigns; Claude only picks mood id.
 STYLE: dict[str, dict[str, Any]] = {
-    "calm": {"label": "Calm (baseline)", "color": "#FFD700", "brightness": 180},
-    "stressed": {"label": "Escalating / Stressed", "color": "#FF0000", "brightness": 255},
-    "happy": {"label": "Happy / Energetic", "color": "#FF69B4", "brightness": 220},
-    "sad": {"label": "Sad / Drained", "color": "#4169E1", "brightness": 115},
+    "calm": {"label": "Calm (baseline)", "color": "#FFD700", "brightness": DEFAULT_LAMP_BRIGHTNESS},
+    "stressed": {"label": "Escalating / Stressed", "color": "#FF0000", "brightness": DEFAULT_LAMP_BRIGHTNESS},
+    "happy": {"label": "Happy / Energetic", "color": "#FF69B4", "brightness": DEFAULT_LAMP_BRIGHTNESS},
+    "sad": {"label": "Sad / Drained", "color": "#4169E1", "brightness": DEFAULT_LAMP_BRIGHTNESS},
 }
 
 # deviceId -> latest state
@@ -57,6 +61,11 @@ class AnalyzeBody(BaseModel):
     deviceId: str = Field(..., min_length=1, max_length=128)
     restingBpm: float | None = Field(None, ge=30, le=120)
     samples: list[HRSample] = Field(..., min_length=1, max_length=64)
+    timeZoneId: str | None = Field(
+        None,
+        max_length=128,
+        description="IANA time zone (e.g. America/New_York) for local time context in mood rules",
+    )
 
     @field_validator("samples")
     @classmethod
@@ -148,13 +157,22 @@ def _now_in_user_tz(time_zone_id: str) -> dict[str, str]:
 
 # Tokens kept small: short rules + low max_tokens on the API call.
 CLAUDE_SYSTEM = """JSON only, no markdown: {"mood":"calm|stressed|happy|sad","reason":"<≤12 words>"}
-calm=steady near baseline; stressed=sharp jumps; happy=smooth up; sad=flat low vs baseline.
-Input: resting_bpm?, bpms oldest→newest. Shape over stereotypes."""
+Often ONE current BPM vs resting_bpm (Apple Health). Use delta vs resting first — not stereotypes alone.
+If multiple bpms (oldest→newest), a workout window can show swings or a climb — reflect that briefly.
+calm≈near resting; stressed=high vs resting or erratic multi-sample swings; happy=clear lift; sad=low vs resting.
+Optional local_one_line is user's clock — flavor only; no medical claims."""
 
 
-async def classify_claude(resting_bpm: float | None, bpms: list[float]) -> tuple[str, str]:
+async def classify_claude(
+    resting_bpm: float | None,
+    bpms: list[float],
+    time_zone_id: str | None,
+) -> tuple[str, str]:
     b = bpms[-16:] if len(bpms) > 16 else bpms
-    payload = {"resting_bpm": resting_bpm, "bpms": b}
+    payload: dict[str, Any] = {"resting_bpm": resting_bpm, "bpms": b, "n": len(b)}
+    tz = (time_zone_id or "").strip()
+    if tz:
+        payload["local_one_line"] = _now_in_user_tz(tz)["one_liner"]
     user_text = json.dumps(payload, separators=(",", ":"))
 
     body = {
@@ -231,10 +249,10 @@ def pack_state(device_id: str, mood: str, reason: str, source: str) -> dict[str,
 
 
 EXPLAIN_MOOD_SYSTEM = """JSON only: {"caption":"<one sentence ≤200 chars>"}
-Input keys: m=mood (calm|stressed|happy|sad), n=authoritative local now (weekday date clock tz period)—use n as the ONLY source for weekday and time-of-day; never contradict n.
-h=null or {r: resting BPM?, b: last BPM samples[], c: classifier phrase?, s: source?}. No diagnoses.
-If h set: blend gentle pulse hints + life context from n (weekend/weekday/season/evening etc.). If h null: everyday hints from n only (no vitals).
-Plain text in caption, no markdown."""
+Keys: m=base mood (calm|stressed|happy|sad, lamp palette only); n=authoritative local now—use n only for weekday/time; never contradict n.
+h=null or {r,b,c,s} HR compact. No diagnoses.
+u=optional user mood name (their word). If u is set: caption MUST match u's emotion—e.g. scared/fearful→reasons like tension, surprises, darkness, worry; peaceful→quiet wind-down; joyful→bright moments. Never give calm/peaceful evening copy when u implies fear or panic. If u empty: tone follows m and n.
+Blend HR (h) with n when present; keep one sentence. Plain text, no markdown."""
 
 
 def pack_manual(
@@ -307,6 +325,24 @@ def _everyday_context_fragment(local_date: str, mood: str) -> str:
     return f"{mood_line} — maybe {extra}, or whatever your day's weather feels like"
 
 
+def _fallback_emotional_hint_for_custom_label(label: str) -> str:
+    """Tiny heuristic line so offline copy still tracks the user's word."""
+    low = label.lower()
+    if any(x in low for x in ("scar", "fear", "afraid", "panic", "terror", "fright")):
+        return "Shadows, sudden noise, or a racing mind can stir that feeling—let the light stay gentle."
+    if any(x in low for x in ("angry", "rage", "mad", "furious")):
+        return "Heat-of-the-moment friction or unfair surprises often fuel that spark—breathe with the glow."
+    if any(x in low for x in ("sad", "blue", "down", "grief", "lonely")):
+        return "Quiet rooms, long evenings, or missing someone can land heavy—soft light helps hold the space."
+    if any(x in low for x in ("happy", "joy", "excited", "thrilled")):
+        return "Good news, friends, or a burst of energy might paint the night—ride the brightness."
+    if any(x in low for x in ("calm", "peace", "relaxed", "chill", "zen")):
+        return "Slow breathing, a cozy corner, or wind-down time fits this hue."
+    if any(x in low for x in ("stress", "worried", "anxious", "tense")):
+        return "Deadlines, pings, or what-ifs can wind you tight—small rituals and dim warmth help."
+    return "Tiny everyday sparks—people, weather, news—can tint how this mood lands."
+
+
 def _fallback_explain_caption(
     mood: str,
     *,
@@ -314,11 +350,13 @@ def _fallback_explain_caption(
     classifier_reason: str | None,
     recent_bpms: list[float] | None,
     local_date: str,
+    custom_mood_name: str | None = None,
 ) -> str:
     """Deterministic copy when Claude is unavailable; blends HR hints with everyday context when both apply."""
     cr = (classifier_reason or "").strip()
     junk = {"", "manual_ios", "claude", "too few samples"}
     everyday = _everyday_context_fragment(local_date, mood)
+    cu = (custom_mood_name or "").strip()[:48]
 
     hr_part: str | None = None
     if has_hr and recent_bpms:
@@ -329,6 +367,13 @@ def _fallback_explain_caption(
             hr_part = f"Recent heart-rate samples hovered near {avg:.0f} BPM"
     elif has_hr and cr and cr not in junk:
         hr_part = f"Your pulse pattern looked {cr}"
+
+    if cu:
+        label_hint = _fallback_emotional_hint_for_custom_label(cu)
+        mid = f"For «{cu}»: {label_hint}"
+        if hr_part:
+            return f"{hr_part} — {mid} — {everyday}"
+        return f"{mid} — {everyday}."
 
     if hr_part:
         return f"{hr_part} — {everyday}."
@@ -383,6 +428,19 @@ class ExplainMoodBody(BaseModel):
     recentBpms: list[float] | None = Field(None, max_length=64)
     classifierReason: str | None = Field(None, max_length=512)
     analyzeSource: str | None = Field(None, max_length=64)
+    customMoodName: str | None = Field(
+        None,
+        max_length=48,
+        description="User-entered mood label (Customize mood); drives caption tone",
+    )
+
+    @field_validator("customMoodName")
+    @classmethod
+    def strip_custom_mood(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        s = v.strip()
+        return s if s else None
 
     @field_validator("mood")
     @classmethod
@@ -465,6 +523,8 @@ async def analyze(
     require_api_key(x_api_key)
 
     bpms = [s.bpm for s in body.samples]
+    tz_id = (body.timeZoneId or "").strip() or None
+    period = _now_in_user_tz(tz_id)["period"] if tz_id else None
 
     mood: str | None = None
     reason = ""
@@ -472,14 +532,14 @@ async def analyze(
 
     if ANTHROPIC_API_KEY:
         try:
-            mood, reason = await classify_claude(body.restingBpm, bpms)
+            mood, reason = await classify_claude(body.restingBpm, bpms, tz_id)
         except Exception as e:
             log.warning("Claude failed, using heuristic: %s", e)
             source = "heuristic_after_claude_error"
-            mood, reason = classify_heuristic(bpms, body.restingBpm)
+            mood, reason = classify_heuristic(bpms, body.restingBpm, period=period)
     else:
         source = "heuristic"
-        mood, reason = classify_heuristic(bpms, body.restingBpm)
+        mood, reason = classify_heuristic(bpms, body.restingBpm, period=period)
 
     state = pack_state(body.deviceId, mood, reason, source)
     return {
@@ -565,12 +625,14 @@ async def explain_mood(
         if len(h_compact) == 0:
             h_compact = None
 
-    # Minimal user message: short keys, tiny payload
-    payload_user = {
+    # Minimal user message: short keys, tiny payload (u=user mood word when set)
+    payload_user: dict[str, Any] = {
         "m": body.mood,
         "n": now_ctx["one_liner"],
         "h": h_compact,
     }
+    if body.customMoodName:
+        payload_user["u"] = body.customMoodName[:48]
 
     caption = ""
     if ANTHROPIC_API_KEY:
@@ -584,6 +646,7 @@ async def explain_mood(
                 classifier_reason=(cr_signal or None),
                 recent_bpms=rb,
                 local_date=local_date_for_fallback,
+                custom_mood_name=body.customMoodName,
             )
     else:
         caption = _fallback_explain_caption(
@@ -592,6 +655,7 @@ async def explain_mood(
             classifier_reason=(cr_signal or None),
             recent_bpms=rb,
             local_date=local_date_for_fallback,
+            custom_mood_name=body.customMoodName,
         )
 
     return {"ok": True, "caption": caption}

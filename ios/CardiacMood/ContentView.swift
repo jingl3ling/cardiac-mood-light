@@ -41,7 +41,6 @@ struct ContentView: View {
   /// 0…1 hue for spectrum tint (saturation/brightness fixed for LED-friendly colors).
   @State private var spectrumHue: Double = 0
   @AppStorage("customMoodDisplayName") private var customMoodName = ""
-  @State private var blinkBpmDraft = "72"
   @State private var debouncedLampTask: Task<Void, Never>?
 
   private var selectedPreset: MoodPreset {
@@ -116,7 +115,7 @@ struct ContentView: View {
                 lampPreviewRow
                 brightnessControls
               }
-              .padding(.top, 10)
+              .padding(.top, 18)
             }
 
             CuteCard {
@@ -128,14 +127,11 @@ struct ContentView: View {
             }
 
             CuteCard {
-              watchAndHealthSection
-            }
-
-            CuteCard {
               appearanceSection
             }
           }
           .padding(.horizontal, 18)
+          .padding(.top, 16)
           .padding(.bottom, 28)
         }
         .refreshable {
@@ -152,22 +148,22 @@ struct ContentView: View {
             hub.lampPowerOn.toggle()
             syncLampImmediate()
           } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: 4) {
               Image(systemName: hub.lampPowerOn ? "power.circle.fill" : "power.circle")
-                .font(.system(size: 20))
+                .font(.system(size: 17))
               Text(hub.lampPowerOn ? "On" : "Off")
-                .font(.system(.subheadline, design: .rounded).weight(.bold))
+                .font(.system(.caption, design: .rounded).weight(.semibold))
             }
             .foregroundStyle(hub.lampPowerOn ? Color.green : Color.secondary)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
             .background(
               Capsule(style: .continuous)
                 .fill(Color(uiColor: .secondarySystemGroupedBackground))
             )
             .overlay(
               Capsule(style: .continuous)
-                .strokeBorder(hub.lampPowerOn ? Color.green.opacity(0.45) : Color.clear, lineWidth: 1.5)
+                .strokeBorder(hub.lampPowerOn ? Color.green.opacity(0.45) : Color.clear, lineWidth: 1.25)
             )
             .contentShape(Capsule(style: .continuous))
           }
@@ -192,13 +188,18 @@ struct ContentView: View {
       if customColorEnabled {
         spectrumHue = hueFromPresetHex(selectedPreset.hex)
       }
-      blinkBpmDraft = String(Int(hub.blinkBpm.rounded()))
     }
-    .task(id: selectedMoodId) {
-      await hub.refreshMoodInsight(selectedFallbackMood: selectedMoodId)
+    .onChange(of: hub.lastMood) { _, newVal in
+      if validMoods.contains(newVal) {
+        selectedMoodId = newVal
+      }
     }
-    .onChange(of: hub.blinkBpm) { _, newVal in
-      blinkBpmDraft = String(Int(newVal.rounded()))
+    /// Explain-mood runs when mood selection, customize toggle, custom label, or server-evaluated mood (`lastMood`) changes — not on brightness-only edits.
+    .task(id: "\(selectedMoodId)|\(customColorEnabled)|\(customMoodName)|\(hub.lastMood)") {
+      await hub.refreshMoodInsight(
+        selectedFallbackMood: selectedMoodId,
+        customUserMoodName: resolvedMoodLabelForAPI()
+      )
     }
     .onDisappear {
       debouncedLampTask?.cancel()
@@ -255,6 +256,7 @@ struct ContentView: View {
         Text(headlineTitle)
           .font(.system(.title3, design: .rounded).weight(.bold))
           .foregroundStyle(.primary)
+          .padding(.top, 4)
         if !hub.moodInsight.isEmpty {
           Text(hub.moodInsight)
             .font(.system(.subheadline, design: .rounded))
@@ -278,6 +280,7 @@ struct ContentView: View {
           moodTile(preset, isSelected: preset.id == selectedMoodId)
         }
       }
+      .padding(.top, 14)
 
       appleHealthHeartRateSection
 
@@ -301,39 +304,6 @@ struct ContentView: View {
         syncLampImmediate()
       }
 
-      VStack(alignment: .leading, spacing: 10) {
-        HStack {
-          Text("Heartbeat (BPM)")
-            .font(.system(.subheadline, design: .rounded))
-          Spacer()
-          Text("Now \(Int(hub.blinkBpm.rounded()))")
-            .font(.system(.subheadline, design: .rounded).weight(.semibold).monospacedDigit())
-            .foregroundStyle(Color.pink.opacity(0.9))
-        }
-
-        TextField("e.g. 72", text: $blinkBpmDraft)
-          .keyboardType(.numberPad)
-          .textFieldStyle(.roundedBorder)
-          .font(.system(.body, design: .rounded).weight(.medium).monospacedDigit())
-          .disabled(!hub.blinkEnabled)
-
-        Button {
-          applyHeartbeatBpmEntry()
-        } label: {
-          Text("Apply heartbeat")
-            .frame(maxWidth: .infinity)
-        }
-        .buttonStyle(.borderedProminent)
-        .tint(.pink)
-        .disabled(!hub.blinkEnabled)
-
-        Text("Uses 30–220 BPM on the lamp (values are adjusted when you apply).")
-          .font(.system(.caption2, design: .rounded))
-          .foregroundStyle(.secondary)
-      }
-      .opacity(hub.blinkEnabled ? 1 : 0.45)
-      .allowsHitTesting(hub.blinkEnabled)
-
       if hub.isSending {
         ProgressView()
           .padding(.top, 4)
@@ -348,9 +318,22 @@ struct ContentView: View {
 
   private var appleHealthHeartRateSection: some View {
     VStack(alignment: .leading, spacing: 8) {
-      Label("Latest from Health", systemImage: "heart.circle.fill")
-        .font(.system(.subheadline, design: .rounded).weight(.bold))
-        .foregroundStyle(.secondary)
+      HStack(alignment: .center, spacing: 10) {
+        Label("Latest from Health", systemImage: "heart.circle.fill")
+          .font(.system(.subheadline, design: .rounded).weight(.bold))
+          .foregroundStyle(.secondary)
+        Spacer(minLength: 8)
+        Button {
+          Task { await hub.refreshLatestHeartRateFromHealth() }
+        } label: {
+          Image(systemName: "arrow.clockwise.circle.fill")
+            .font(.system(size: 22))
+            .symbolRenderingMode(.hierarchical)
+            .foregroundStyle(.secondary)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Refresh latest heart rate from Health")
+      }
       if let bpm = hub.latestAppleHealthHeartRateBpm {
         HStack(alignment: .firstTextBaseline) {
           Text("\(Int(bpm.rounded())) BPM")
@@ -375,13 +358,13 @@ struct ContentView: View {
   private var customColorSection: some View {
     VStack(alignment: .leading, spacing: 14) {
       HStack(alignment: .center, spacing: 10) {
-        Text("Custom tint")
+        Text("Customize mood")
           .font(.system(.headline, design: .rounded).weight(.semibold))
         Spacer(minLength: 8)
-        Toggle("Custom tint", isOn: $customColorEnabled)
+        Toggle("Customize mood", isOn: $customColorEnabled)
           .labelsHidden()
           .tint(Color(red: 0.98, green: 0.55, blue: 0.72))
-          .accessibilityLabel("Custom tint")
+          .accessibilityLabel("Customize mood")
       }
       .frame(minHeight: 44)
       .onChange(of: customColorEnabled) { _, enabled in
@@ -429,31 +412,6 @@ struct ContentView: View {
             scheduleLampSyncDebounced()
           }
       }
-    }
-  }
-
-  private var watchAndHealthSection: some View {
-    VStack(alignment: .leading, spacing: 12) {
-      Label("Heart rate", systemImage: "heart.text.square.fill")
-        .font(.system(.subheadline, design: .rounded).weight(.bold))
-        .foregroundStyle(.secondary)
-
-      HStack {
-        Text(hub.authorizationStatus)
-        if hub.watchSessionActive {
-          Text("Watch")
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-        }
-      }
-      .font(.system(.caption, design: .rounded))
-      .foregroundStyle(.secondary)
-
-      Button("Health access") {
-        Task { await hub.authorizeHealthIfNeeded() }
-      }
-      .font(.system(.subheadline, design: .rounded).weight(.medium))
-      .buttonStyle(.bordered)
     }
   }
 
@@ -557,24 +515,6 @@ struct ContentView: View {
       )
     }
     .buttonStyle(.plain)
-  }
-
-  private func applyHeartbeatBpmEntry() {
-    hub.lastError = ""
-    let trimmed = blinkBpmDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !trimmed.isEmpty else {
-      blinkBpmDraft = String(Int(hub.blinkBpm.rounded()))
-      return
-    }
-    let normalized = trimmed.replacingOccurrences(of: ",", with: ".")
-    guard let parsed = Double(normalized), parsed.isFinite else {
-      hub.lastError = "Enter a valid number for BPM."
-      return
-    }
-    let clamped = min(220, max(30, parsed))
-    hub.blinkBpm = clamped
-    blinkBpmDraft = String(Int(clamped.rounded()))
-    syncLampImmediate()
   }
 
   private func resolvedMoodLabelForAPI() -> String? {

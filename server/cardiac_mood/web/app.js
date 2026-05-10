@@ -282,7 +282,19 @@
     state.insightClassifierReason = null;
   }
 
-  async function refreshMoodInsight(fallbackMood) {
+  function moodChangedForInsight(prev, next) {
+    const known = ["calm", "stressed", "happy", "sad"];
+    const p = String(prev || "")
+      .trim()
+      .toLowerCase();
+    const n = String(next || "")
+      .trim()
+      .toLowerCase();
+    if (!known.includes(p) || p === "—") return known.includes(n);
+    return p !== n;
+  }
+
+  async function refreshMoodInsight(fallbackMood, customMoodName = null) {
     state.insightGen += 1;
     const token = state.insightGen;
     const moodKey =
@@ -304,6 +316,7 @@
       recentBpms: state.insightRecentBpms,
       classifierReason: state.insightClassifierReason,
       analyzeSource: state.lastAnalyzeSource || null,
+      customMoodName: customMoodName || null,
     };
 
     try {
@@ -316,12 +329,26 @@
       $("moodInsight").textContent = state.moodInsight;
     } catch {
       if (token !== state.insightGen) return;
-      state.moodInsight = localFallbackInsight(moodKey);
+      state.moodInsight = localFallbackInsight(moodKey, customMoodName);
       $("moodInsight").textContent = state.moodInsight;
     }
   }
 
-  function localFallbackInsight(mood) {
+  function localFallbackInsight(mood, customName) {
+    const c = customName && String(customName).trim();
+    if (c) {
+      const low = c.toLowerCase();
+      if (/scar|fear|afraid|panic/.test(low)) {
+        return `For «${c.slice(0, 48)}»: sudden noise, shadows, or a racing mind can spike that feeling—the lamp keeps the edge soft.`;
+      }
+      if (/anger|rage|mad|furious/.test(low)) {
+        return `For «${c.slice(0, 48)}»: friction, unfair surprises, or tight deadlines often fan the heat—breathe with the glow.`;
+      }
+      if (/peace|calm|relax/.test(low)) {
+        return `For «${c.slice(0, 48)}»: slow breathing, a cozy corner, or winding down fits this light.`;
+      }
+      return `For «${c.slice(0, 48)}»: little everyday sparks—people, news, or the hour—can tint how this mood lands.`;
+    }
     const map = {
       stressed:
         "Stressed tones can mirror a hectic stretch — weather, deadlines, or just too much coffee.",
@@ -359,10 +386,13 @@
         }),
       });
       if (token !== state.manualGen) return;
+      const prevMood = state.lastMood;
       state.insightRestingBpm = null;
       state.insightRecentBpms = null;
       applyAnalyzeResponse(resp);
-      await refreshMoodInsight(mood);
+      if (moodChangedForInsight(prevMood, resp.mood)) {
+        await refreshMoodInsight(mood, moodLabelForAPI());
+      }
     } catch (e) {
       if (token !== state.manualGen) return;
       $("lastError").textContent = String(e.message || e);
@@ -419,7 +449,6 @@
         }
         buildMoodGrid();
         syncLampImmediate();
-        refreshMoodInsight(state.selectedMoodId);
       });
       grid.appendChild(btn);
     }
@@ -488,7 +517,6 @@
     }
     updatePreviewUI();
     syncLampImmediate();
-    refreshMoodInsight(state.selectedMoodId);
   });
 
   $("spectrumHue").addEventListener("input", (e) => {
@@ -548,14 +576,18 @@
           deviceId: deviceId(),
           restingBpm,
           samples,
+          timeZoneId: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
         }),
       });
       state.insightRestingBpm = restingBpm;
       state.insightRecentBpms = bpms;
+      const prevMood = state.lastMood;
       state.selectedMoodId = resp.mood;
       applyAnalyzeResponse(resp);
       buildMoodGrid();
-      await refreshMoodInsight(resp.mood);
+      if (moodChangedForInsight(prevMood, resp.mood)) {
+        await refreshMoodInsight(resp.mood, null);
+      }
     } catch (e) {
       $("lastError").textContent = String(e.message || e);
     } finally {
@@ -572,5 +604,5 @@
   updatePreviewUI();
 
   syncLampImmediate();
-  refreshMoodInsight(state.selectedMoodId);
+  refreshMoodInsight(state.selectedMoodId, moodLabelForAPI());
 })();

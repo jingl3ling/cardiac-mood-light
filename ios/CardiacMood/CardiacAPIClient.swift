@@ -9,6 +9,8 @@ struct AnalyzeRequestBody: Codable {
   let deviceId: String
   let restingBpm: Double?
   let samples: [HRSampleDTO]
+  /// IANA id (e.g. `America/New_York`) so the server can fold in local time-of-day with single-BPM analyze.
+  let timeZoneId: String?
 }
 
 struct AnalyzeResponseBody: Codable {
@@ -34,6 +36,8 @@ struct ExplainMoodRequestBody: Codable {
   let recentBpms: [Double]?
   let classifierReason: String?
   let analyzeSource: String?
+  /// User-entered mood name ("Customize mood"); optional.
+  let customMoodName: String?
 }
 
 struct ExplainMoodResponseBody: Codable {
@@ -66,14 +70,19 @@ struct CardiacAPIClient {
     self.session = session
   }
 
-  func analyze(deviceId: String, restingBpm: Double?, samples: [HRSampleDTO]) async throws -> AnalyzeResponseBody {
+  func analyze(
+    deviceId: String,
+    restingBpm: Double?,
+    samples: [HRSampleDTO],
+    timeZoneId: String?
+  ) async throws -> AnalyzeResponseBody {
     var req = URLRequest(url: Config.baseURL.appendingPathComponent("/v1/cardiac/analyze"))
     req.httpMethod = "POST"
     req.setValue("application/json", forHTTPHeaderField: "Content-Type")
     if !Config.apiKey.isEmpty {
       req.setValue(Config.apiKey, forHTTPHeaderField: "x-api-key")
     }
-    let body = AnalyzeRequestBody(deviceId: deviceId, restingBpm: restingBpm, samples: samples)
+    let body = AnalyzeRequestBody(deviceId: deviceId, restingBpm: restingBpm, samples: samples, timeZoneId: timeZoneId)
     req.httpBody = try JSONEncoder().encode(body)
 
     let (data, resp) = try await session.data(for: req)
@@ -125,7 +134,8 @@ struct CardiacAPIClient {
     restingBpm: Double?,
     recentBpms: [Double]?,
     classifierReason: String?,
-    analyzeSource: String?
+    analyzeSource: String?,
+    customMoodName: String?
   ) async throws -> String {
     var req = URLRequest(url: Config.baseURL.appendingPathComponent("/v1/cardiac/explain-mood"))
     req.httpMethod = "POST"
@@ -141,7 +151,8 @@ struct CardiacAPIClient {
       restingBpm: restingBpm,
       recentBpms: recentBpms,
       classifierReason: classifierReason,
-      analyzeSource: analyzeSource
+      analyzeSource: analyzeSource,
+      customMoodName: customMoodName
     )
     req.httpBody = try JSONEncoder().encode(body)
 

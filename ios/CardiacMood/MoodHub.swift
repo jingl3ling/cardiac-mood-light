@@ -22,7 +22,7 @@ final class MoodHub: NSObject, ObservableObject {
   /// When BPM is set: short time string ("3:42 PM"). When nil: status / empty-state message.
   @Published var appleHealthHeartRateDetail: String = ""
   /// Mirrors server brightness for the lamp slider (0…255).
-  @Published var lampBrightness: Double = 120
+  @Published var lampBrightness: Double = Config.defaultLampBrightness
   @Published var lampPowerOn = true
   @Published var blinkEnabled = false
   @Published var blinkBpm: Double = 72
@@ -36,6 +36,13 @@ final class MoodHub: NSObject, ObservableObject {
   private var insightRecentBpms: [Double]?
   private var insightClassifierReason: String?
   private var lastAnalyzeSource = ""
+
+  /// Latest resting HR from HealthKit (for explain-mood when Watch/analyze context is absent).
+  private var healthSnapshotRestingBpm: Double?
+  /// Avoid re-running `/analyze` on every poll when the newest HR sample is unchanged.
+  private var lastHealthAutoAnalyzedNewestSampleEnd: Date?
+  /// Resting-only fallback when no instantaneous HR samples exist.
+  private var lastHealthRestingAnalyzeKey: String?
 
   private let knownMoods = Set(["calm", "stressed", "happy", "sad"])
 
@@ -75,33 +82,87 @@ final class MoodHub: NSObject, ObservableObject {
     }
   }
 
-  /// Loads the most recent heart rate quantity sample from HealthKit (same data you see in the Health app).
+  /// Loads the latest HR-related value from HealthKit.
+  /// Important: read authorization cannot be trusted from `authorizationStatus` alone — Apple recommends querying first.
+  /// ECG and **Heart Rate** are separate toggles per app in Health; another app seeing ECG does not grant HR here.
+  ///
+  /// **Display** uses `latestHeartRateSample()` so “Latest from Health” shows the true newest heartbeat row from HealthKit.
+  /// `/analyze` uses a short sample window when present; otherwise a single pulse or resting-only path.
   func refreshLatestHeartRateFromHealth() async {
     guard baseline.isHealthDataAvailable() else {
       latestAppleHealthHeartRateBpm = nil
       appleHealthHeartRateDetail = "Health not available on this device."
+      healthSnapshotRestingBpm = nil
       return
     }
 
-    let status = baseline.heartRateReadAuthorizationStatus()
-    if status == .sharingDenied {
-      latestAppleHealthHeartRateBpm = nil
-      appleHealthHeartRateDetail = "Heart rate access denied — enable in Settings › Privacy & Security › Health."
-      return
-    }
+    healthSnapshotRestingBpm = await baseline.latestRestingBpm()
 
-    if let sample = await baseline.latestHeartRateSample() {
-      latestAppleHealthHeartRateBpm = sample.bpm
-      let t = DateFormatter.localizedString(from: sample.endDate, dateStyle: .none, timeStyle: .short)
+    let pulse = await baseline.latestHeartRateSample()
+    if let pulse {
+      latestAppleHealthHeartRateBpm = pulse.bpm
+      let t = DateFormatter.localizedString(from: pulse.endDate, dateStyle: .none, timeStyle: .short)
       appleHealthHeartRateDetail = "Updated \(t)"
+    } else if let resting = healthSnapshotRestingBpm {
+      latestAppleHealthHeartRateBpm = resting
+      appleHealthHeartRateDetail = "Latest resting heart rate in Health"
+    } else {
+      latestAppleHealthHeartRateBpm = nil
+      switch baseline.heartRateReadAuthorizationStatus() {
+      case .notDetermined:
+        appleHealthHeartRateDetail =
+          "Allow Heart Rate when iOS prompts, or Settings › Health › Data Access & Devices › Cardiac Mood."
+      case .sharingDenied:
+        appleHealthHeartRateDetail =
+          "Heart Rate is turned off for this app. Settings › Health › Data Access & Devices › Cardiac Mood — enable Heart Rate (separate from ECG)."
+      default:
+        appleHealthHeartRateDetail =
+          "No heart rate data yet. Sync Apple Watch, or open Health › Heart Rate. Note: ECG access in another app is different from Heart Rate here."
+      }
+    }
+
+    let recent = await baseline.recentHeartRateBpmsOldestFirst(limit: 16)
+    if let newest = recent.last {
+      let newestEnd = newest.endDate
+      let shouldAutoAnalyze = lastHealthAutoAnalyzedNewestSampleEnd != newestEnd
+      if shouldAutoAnalyze {
+        let bpms = recent.map(\.bpm)
+        let ts = recent.map { iso8601WithFraction.string(from: $0.endDate) }
+        let ok = await runAnalyze(bpms: bpms, timestamps: ts)
+        if ok {
+          lastHealthAutoAnalyzedNewestSampleEnd = newestEnd
+          lastHealthRestingAnalyzeKey = nil
+        }
+      }
       return
     }
 
-    latestAppleHealthHeartRateBpm = nil
-    if status == .notDetermined {
-      appleHealthHeartRateDetail = "Tap Health access below to read heart rate from Health."
-    } else {
-      appleHealthHeartRateDetail = "No heart rate in Health yet. Sync your Apple Watch or record a workout."
+    if let pulse {
+      let pulseEnd = pulse.endDate
+      if lastHealthAutoAnalyzedNewestSampleEnd != pulseEnd {
+        let ok = await runAnalyze(
+          bpms: [pulse.bpm],
+          timestamps: [iso8601WithFraction.string(from: pulse.endDate)]
+        )
+        if ok {
+          lastHealthAutoAnalyzedNewestSampleEnd = pulseEnd
+          lastHealthRestingAnalyzeKey = nil
+        }
+      }
+      return
+    }
+
+    if let resting = healthSnapshotRestingBpm {
+      let key = String(format: "%.1f", resting)
+      let shouldAnalyze = lastHealthRestingAnalyzeKey != key
+      if shouldAnalyze {
+        let t = iso8601WithFraction.string(from: Date())
+        let ok = await runAnalyze(bpms: [resting], timestamps: [t])
+        if ok {
+          lastHealthRestingAnalyzeKey = key
+          lastHealthAutoAnalyzedNewestSampleEnd = nil
+        }
+      }
     }
   }
 
@@ -112,7 +173,7 @@ final class MoodHub: NSObject, ObservableObject {
       return
     }
     let bpms = bpmsUntyped.compactMap { ($0 as? NSNumber)?.doubleValue }
-    guard bpms.count >= 3 else {
+    guard bpms.count >= 1 else {
       lastError = "too few bpms"
       return
     }
@@ -125,10 +186,11 @@ final class MoodHub: NSObject, ObservableObject {
       timestamps = bpms.map { _ in now }
     }
 
-    await runAnalyze(bpms: bpms, timestamps: timestamps)
+    _ = await runAnalyze(bpms: bpms, timestamps: timestamps)
   }
 
-  private func runAnalyze(bpms: [Double], timestamps: [String]) async {
+  @discardableResult
+  private func runAnalyze(bpms: [Double], timestamps: [String]) async -> Bool {
     isSending = true
     defer { isSending = false }
 
@@ -141,13 +203,19 @@ final class MoodHub: NSObject, ObservableObject {
     }
 
     do {
-      let resp = try await api.analyze(deviceId: Config.deviceId, restingBpm: resting, samples: samples)
+      let resp = try await api.analyze(
+        deviceId: Config.deviceId,
+        restingBpm: resting,
+        samples: samples,
+        timeZoneId: TimeZone.current.identifier
+      )
       insightRestingBpm = resting
       insightRecentBpms = bpms
       applyAnalyzeResponse(resp)
-      await refreshMoodInsight(selectedFallbackMood: resp.mood)
+      return true
     } catch {
       lastError = String(describing: error)
+      return false
     }
   }
 
@@ -172,11 +240,27 @@ final class MoodHub: NSObject, ObservableObject {
     insightClassifierReason = nil
   }
 
-  func refreshMoodInsight(selectedFallbackMood: String = "calm") async {
+  func refreshMoodInsight(selectedFallbackMood: String = "calm", customUserMoodName: String? = nil) async {
     moodInsightGeneration += 1
     let token = moodInsightGeneration
     let moodKey =
       lastMood != "—" && knownMoods.contains(lastMood) ? lastMood : selectedFallbackMood
+
+    let restingForExplain = insightRestingBpm ?? healthSnapshotRestingBpm
+    let recentForExplain: [Double]? = {
+      if let r = insightRecentBpms, !r.isEmpty { return r }
+      if let b = latestAppleHealthHeartRateBpm { return [b] }
+      return nil
+    }()
+    let sourceForExplain: String? = {
+      if let r = insightRecentBpms, !r.isEmpty {
+        return lastAnalyzeSource.isEmpty ? nil : lastAnalyzeSource
+      }
+      if latestAppleHealthHeartRateBpm != nil {
+        return "apple_health"
+      }
+      return lastAnalyzeSource.isEmpty ? nil : lastAnalyzeSource
+    }()
 
     do {
       let caption = try await api.explainMoodInsight(
@@ -184,16 +268,17 @@ final class MoodHub: NSObject, ObservableObject {
         mood: moodKey,
         localDate: Self.localCalendarDateString(),
         timeZoneId: TimeZone.current.identifier,
-        restingBpm: insightRestingBpm,
-        recentBpms: insightRecentBpms,
+        restingBpm: restingForExplain,
+        recentBpms: recentForExplain,
         classifierReason: insightClassifierReason,
-        analyzeSource: lastAnalyzeSource.isEmpty ? nil : lastAnalyzeSource
+        analyzeSource: sourceForExplain,
+        customMoodName: customUserMoodName
       )
       guard token == moodInsightGeneration else { return }
       moodInsight = caption
     } catch {
       guard token == moodInsightGeneration else { return }
-      moodInsight = Self.localFallbackInsight(mood: moodKey)
+      moodInsight = Self.localFallbackInsight(mood: moodKey, customName: customUserMoodName)
     }
   }
 
@@ -206,7 +291,21 @@ final class MoodHub: NSObject, ObservableObject {
     return f.string(from: Date())
   }
 
-  private static func localFallbackInsight(mood: String) -> String {
+  private static func localFallbackInsight(mood: String, customName: String?) -> String {
+    if let raw = customName?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty {
+      let c = String(raw.prefix(48))
+      let low = c.lowercased()
+      if low.contains("scar") || low.contains("fear") || low.contains("afraid") || low.contains("panic") {
+        return "For «\(c)»: sudden noise, shadows, or a racing mind can spike that feeling—the lamp keeps the edge soft."
+      }
+      if low.contains("anger") || low.contains("mad") || low.contains("furious") || low.contains("rage") {
+        return "For «\(c)»: friction, unfair surprises, or tight deadlines often fan the heat—breathe with the glow."
+      }
+      if low.contains("peace") || low.contains("calm") || low.contains("relax") {
+        return "For «\(c)»: slow breathing, a cozy corner, or winding down fits this light."
+      }
+      return "For «\(c)»: little everyday sparks—people, news, or the hour—can tint how this mood lands."
+    }
     switch mood.lowercased() {
     case "stressed":
       return "Stressed tones can mirror a hectic stretch — weather, deadlines, or just too much coffee."
@@ -251,7 +350,6 @@ final class MoodHub: NSObject, ObservableObject {
       insightRecentBpms = nil
       applyAnalyzeResponse(resp)
       lastError = ""
-      await refreshMoodInsight(selectedFallbackMood: mood)
     } catch {
       guard token == manualLampGeneration else { return }
       lastError = String(describing: error)

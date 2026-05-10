@@ -65,4 +65,27 @@ final class HealthBaselineReader {
       healthStore.execute(query)
     }
   }
+
+  /// Recent instantaneous heart rate samples, **oldest → newest** (for BPM-window classify / explain-mood).
+  func recentHeartRateBpmsOldestFirst(limit: Int = 16) async -> [(bpm: Double, endDate: Date)] {
+    guard let heartRate = HKQuantityType.quantityType(forIdentifier: .heartRate), limit > 0 else { return [] }
+
+    return await withCheckedContinuation { continuation in
+      let sort = NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)
+      let query = HKSampleQuery(
+        sampleType: heartRate,
+        predicate: nil,
+        limit: limit,
+        sortDescriptors: [sort]
+      ) { _, samples, _ in
+        guard let samples = samples as? [HKQuantitySample], !samples.isEmpty else {
+          continuation.resume(returning: [])
+          return
+        }
+        let mapped = samples.map { ($0.quantity.doubleValue(for: Self.heartRateUnit), $0.endDate) }
+        continuation.resume(returning: mapped.reversed())
+      }
+      healthStore.execute(query)
+    }
+  }
 }

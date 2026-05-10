@@ -12,4 +12,7 @@ enum Config {
 
   /// Used when HealthKit has no resting heart rate sample yet
   static let defaultRestingBpm = 72.0
+
+  /// Default lamp brightness (0…255) before any server/analyze response.
+  static let defaultLampBrightness: Double = 120
 }

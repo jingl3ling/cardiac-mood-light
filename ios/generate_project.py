@@ -45,6 +45,8 @@ F_ios_api = U()
 F_ios_hr = U()
 F_ios_mood = U()
 F_ios_ent = U()
+F_ios_assets = U()
+BF_ios_assets = U()
 
 F_w_app = U()
 F_w_cv = U()
@@ -102,6 +104,10 @@ ln("/* Begin PBXBuildFile section */")
 for fr, bf, name in IOS_FILES:
     ln(f"\t\t{bf} /* {name} in Sources */ = {{isa = PBXBuildFile; fileRef = {fr} /* {name} */; }};")
 
+ln(
+    f"\t\t{BF_ios_assets} /* Assets.xcassets in Resources */ = {{isa = PBXBuildFile; fileRef = {F_ios_assets} /* Assets.xcassets */; }};"
+)
+
 for fr, bf, name in W_FILES:
     ln(f"\t\t{bf} /* {name} in Sources */ = {{isa = PBXBuildFile; fileRef = {fr} /* {name} */; }};")
 
@@ -133,6 +139,9 @@ for fr, _, name in IOS_FILES:
     ln(f'\t\t{fr} /* {name} */ = {{isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = {name}; sourceTree = "<group>"; }};')
 
 ln(f'\t\t{F_ios_ent} /* CardiacMood.entitlements */ = {{isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CardiacMood.entitlements; sourceTree = "<group>"; }};')
+ln(
+    f'\t\t{F_ios_assets} /* Assets.xcassets */ = {{isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; }};'
+)
 
 for fr, _, name in W_FILES:
     ln(f'\t\t{fr} /* {name} */ = {{isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = {name}; sourceTree = "<group>"; }};')
@@ -166,6 +175,7 @@ ln(f'\t\t\t\t{F_ios_api} /* CardiacAPIClient.swift */,')
 ln(f'\t\t\t\t{F_ios_hr} /* HealthBaselineReader.swift */,')
 ln(f'\t\t\t\t{F_ios_mood} /* MoodHub.swift */,')
 ln(f'\t\t\t\t{F_ios_ent} /* CardiacMood.entitlements */,')
+ln(f'\t\t\t\t{F_ios_assets} /* Assets.xcassets */,')
 ln("\t\t\t);")
 ln('\t\t\tpath = CardiacMood;')
 ln('\t\t\tsourceTree = "<group>";')
@@ -263,7 +273,10 @@ ln("/* End PBXProject section */")
 ln("")
 
 ln("/* Begin PBXResourcesBuildPhase section */")
-ln(f"\t\t{IOS_RES} /* Resources */ = {{ isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = ( ); runOnlyForDeploymentPostprocessing = 0; }};")
+ln(f"\t\t{IOS_RES} /* Resources */ = {{")
+ln("\t\t\tisa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (")
+ln(f"\t\t\t\t{BF_ios_assets} /* Assets.xcassets in Resources */,")
+ln("\t\t\t); runOnlyForDeploymentPostprocessing = 0; };")
 ln(f"\t\t{WATCH_RES} /* Resources */ = {{ isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = ( ); runOnlyForDeploymentPostprocessing = 0; }};")
 ln("/* End PBXResourcesBuildPhase section */")
 ln("")
@@ -325,7 +338,8 @@ SHARED_REL = """\t\t\t\tALWAYS_SEARCH_USER_PATHS = NO;
 \t\t\t\tIPHONEOS_DEPLOYMENT_TARGET = 17.0;
 \t\t\t\tWATCHOS_DEPLOYMENT_TARGET = 10.0;"""
 
-IOS_SETTINGS = f"""CODE_SIGN_STYLE = Automatic;
+IOS_SETTINGS = f"""ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+CODE_SIGN_STYLE = Automatic;
 CURRENT_PROJECT_VERSION = 1;
 DEVELOPMENT_TEAM = {DEV_TEAM};
 GENERATE_INFOPLIST_FILE = YES;

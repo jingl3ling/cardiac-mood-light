@@ -1,6 +1,8 @@
 """
-Deterministic BPM-window mood classifier — used when Claude is unavailable or
-to validate extremes. Tunings mirror the user's example arrays.
+Mood from heart rate — optimized for **one BPM reading** vs resting, with optional
+short windows when Apple Watch / Health returns several samples (e.g. workouts).
+
+Not clinical advice; crude heuristics for lamp palette only.
 """
 
 from __future__ import annotations
@@ -18,47 +20,75 @@ def _safe_floats(bpms: list[float]) -> list[float]:
         try:
             v = float(x)
             if math.isfinite(v):
-                out.append(v)
+                out.append(max(30.0, min(230.0, v)))
         except (TypeError, ValueError):
             continue
     return out
 
 
-def classify_heuristic(bpms: list[float], resting_bpm: float | None) -> Tuple[Mood, str]:
+def _effective_resting(resting_bpm: float | None, xs: list[float]) -> float:
+    if resting_bpm is not None:
+        return float(resting_bpm)
+    if len(xs) >= 3:
+        return float(statistics.median(xs))
+    # Unknown resting with only 1–2 points — mild prior so delta-vs-rest still runs.
+    return 72.0
+
+
+def _classify_single(bpm: float, rest: float) -> Tuple[Mood, str]:
+    """One instantaneous HR vs resting (main phone / Health path)."""
+    delta = bpm - rest
+    if bpm <= 54 or delta <= -15:
+        return "sad", "below typical resting energy"
+    if delta >= 30 or bpm >= 120:
+        return "stressed", "well above resting"
+    if 10 <= delta <= 42 and bpm >= 76:
+        return "happy", "lifted above resting pace"
+    if abs(delta) <= 11 and 56 <= bpm <= 100:
+        return "calm", "near resting pace"
+    if delta >= 18:
+        return "stressed", "elevated versus resting"
+    if delta <= -8:
+        return "sad", "muted versus resting"
+    return "calm", "steady versus resting"
+
+
+def classify_heuristic(
+    bpms: list[float],
+    resting_bpm: float | None,
+    *,
+    period: str | None = None,
+) -> Tuple[Mood, str]:
+    """
+    ``period`` is morning|afternoon|evening|night — optional soft context from caller TZ.
+    """
     xs = _safe_floats(bpms)
-    if len(xs) < 3:
-        return "calm", "too few samples"
+    if not xs:
+        return "calm", "no samples"
 
-    rest = resting_bpm if resting_bpm is not None else statistics.median(xs)
-    mean = statistics.mean(xs)
+    rest = _effective_resting(resting_bpm, xs)
+
+    # Single reading — compare to resting (+ tiny optional time hint).
+    if len(xs) == 1:
+        mood, reason = _classify_single(xs[0], rest)
+        if period == "night" and mood == "happy":
+            return "calm", "quiet pulse vs resting"
+        return mood, reason
+
+    last = xs[-1]
     spread = max(xs) - min(xs)
-    var = statistics.pvariance(xs) if len(xs) >= 2 else 0.0
-    stdev = math.sqrt(var)
-    deltas = [xs[i + 1] - xs[i] for i in range(len(xs) - 1)]
-    max_up = max((d for d in deltas if d > 0), default=0.0)
-    max_down = min((d for d in deltas if d < 0), default=0.0)
-    max_step = max(abs(d) for d in deltas) if deltas else 0.0
-    slope = (xs[-1] - xs[0]) / max(1, len(xs) - 1)
+    mean = statistics.mean(xs)
+    slope = xs[-1] - xs[0]
 
-    # Sad: below baseline, very flat (e.g. [64,63,63,64,62])
-    if mean <= rest - 3.5 and spread <= 2.5 and stdev <= 1.2:
-        return "sad", "flat and below resting"
+    # Several readings (e.g. workout buffer): volatility + trend.
+    if spread >= 15.0:
+        return "stressed", "pulse swinging across the window"
+    if len(xs) >= 3 and slope >= 10.0 and spread >= 8.0:
+        return "happy", "building HR across samples"
+    if len(xs) >= 3 and mean <= rest - 6 and spread <= 6.0:
+        return "sad", "held low across samples"
+    if len(xs) == 2 and abs(xs[1] - xs[0]) >= 18:
+        return "stressed", "large jump between two readings"
 
-    # Stressed: sharp erratic spike(s) (e.g. [72,75,88,95,102])
-    if max_step >= 7.0 or (max_up >= 6.0 and sum(1 for d in deltas if d >= 4) >= 2):
-        return "stressed", "large rapid BPM jump(s)"
-
-    # Happy: smooth gradual rise, elevated vs start (e.g. [75,78,82,85,86])
-    if slope >= 1.8 and mean >= rest - 2 and max_step <= 4.5 and xs[-1] >= xs[0] + 5:
-        return "happy", "smooth upward trend with moderate steps"
-
-    # Calm: near resting, low spread (e.g. [70,71,70,72,70])
-    if spread <= 4.0 and abs(mean - rest) <= 8.0 and max_step <= 4.0:
-        return "calm", "steady near baseline"
-
-    # Default: leaning calm if close to resting else stressed if rising fast
-    if slope > 3 and spread > 5:
-        return "stressed", "rising with wide swing"
-    if mean < rest - 2:
-        return "sad", "muted relative to resting"
-    return "calm", "default steady"
+    # Fall back to latest beat vs resting.
+    return _classify_single(last, rest)
