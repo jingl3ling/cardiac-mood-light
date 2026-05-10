@@ -18,11 +18,7 @@ private let moodPresets: [MoodPreset] = [
 
 private let validMoods = Set(moodPresets.map(\.id))
 
-<<<<<<< HEAD
-private let lampSyncDebounceNs: UInt64 = 100_000_000
-=======
 private let lampSyncDebounceNs: UInt64 = 8_000_000
->>>>>>> 7bf6255 (works with having to enable customize mood to change color and blinking speed incorrect, will need to do more modifications)
 
 private enum AppearancePreference: String, CaseIterable, Identifiable {
   case system

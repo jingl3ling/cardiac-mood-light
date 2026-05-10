@@ -223,23 +223,12 @@ final class MoodHub: NSObject, ObservableObject {
     return h
   }
 
-<<<<<<< HEAD
-  /// Blink BPM from Health — uses `/sync-blink` only so we never POST `/manual` without a color and reset the lamp palette.
-  private func syncBlinkBpmFromLatestHealthAndPushIfNeeded() async {
-    guard let hr = latestAppleHealthHeartRateBpm else { return }
-    let clamped = min(220.0, max(30.0, hr))
-    let prev = blinkBpm
-    blinkBpm = clamped
-    let delta = abs(clamped - prev)
-    guard blinkEnabled || delta >= 0.2 else { return }
-=======
   /// Blink BPM from Health — `/sync-blink` only so HR polling does not POST `/manual` and stall color updates.
   private func syncBlinkBpmFromLatestHealthAndPushIfNeeded() async {
     guard let hr = latestAppleHealthHeartRateBpm else { return }
     let clamped = min(220.0, max(30.0, hr))
     blinkBpm = clamped
     guard blinkEnabled else { return }
->>>>>>> 7bf6255 (works with having to enable customize mood to change color and blinking speed incorrect, will need to do more modifications)
     do {
       let resp = try await api.syncBlink(
         deviceId: Config.deviceId,
@@ -251,11 +240,9 @@ final class MoodHub: NSObject, ObservableObject {
     } catch {
       lastError = String(describing: error)
     }
-<<<<<<< HEAD
-=======
   }
 
-  /// Blink animation rate follows Apple Health BPM whenever we have a reading; otherwise fall back to the API response.
+  /// Blink rate follows Apple Health BPM when available; otherwise use the API response.
   private func resolveBlinkBpm(from resp: AnalyzeResponseBody) {
     if let hr = latestAppleHealthHeartRateBpm {
       blinkBpm = min(220.0, max(30.0, hr))
@@ -264,7 +251,6 @@ final class MoodHub: NSObject, ObservableObject {
     if let v = resp.blinkBpm {
       blinkBpm = min(220, max(30, v))
     }
->>>>>>> 7bf6255 (works with having to enable customize mood to change color and blinking speed incorrect, will need to do more modifications)
   }
 
   @discardableResult

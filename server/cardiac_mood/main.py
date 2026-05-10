@@ -121,11 +121,7 @@ class ManualLampBody(BaseModel):
 
 
 class SyncBlinkBody(BaseModel):
-<<<<<<< HEAD
-    """Update blink fields only — does not change stored color (see `/manual` + manualVisualLock)."""
-=======
-    """Update blink BPM only — does not rewrite lamp color/label (avoids racing `/manual`)."""
->>>>>>> 7bf6255 (works with having to enable customize mood to change color and blinking speed incorrect, will need to do more modifications)
+    """Update blink BPM/enable only — does not rewrite stored color or mood (avoids racing `/manual`)."""
 
     deviceId: str = Field(..., min_length=1, max_length=128)
     blinkBpm: float = Field(..., ge=30.0, le=220.0)
@@ -673,11 +669,7 @@ async def sync_blink(
     body: SyncBlinkBody,
     x_api_key: str | None = Header(default=None, alias="x-api-key"),
 ) -> dict[str, Any]:
-<<<<<<< HEAD
-    """Heartbeat BPM for ESP — does not rewrite lamp color/mood."""
-=======
-    """Heartbeat BPM for ESP — does not change stored color, brightness, or label."""
->>>>>>> 7bf6255 (works with having to enable customize mood to change color and blinking speed incorrect, will need to do more modifications)
+    """Heartbeat BPM for ESP32 — does not rewrite lamp color, brightness, or mood."""
     require_api_key(x_api_key)
     bpm = max(30.0, min(220.0, float(body.blinkBpm)))
     row = _STORE.get(body.deviceId)
