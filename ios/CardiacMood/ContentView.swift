@@ -111,15 +111,15 @@ struct ContentView: View {
         ScrollView {
           VStack(alignment: .leading, spacing: 18) {
             CuteCard {
-              lampPreviewRow
+              VStack(alignment: .leading, spacing: 16) {
+                lampPreviewRow
+                brightnessControls
+              }
+              .padding(.top, 10)
             }
 
             CuteCard {
               moodsAndBlinkSection
-            }
-
-            CuteCard {
-              brightnessSection
             }
 
             CuteCard {
@@ -194,6 +194,22 @@ struct ContentView: View {
     .onDisappear {
       debouncedLampTask?.cancel()
       debouncedLampTask = nil
+    }
+  }
+
+  /// Brightness slider — sits under the headline block and above the four mood tiles (same card).
+  private var brightnessControls: some View {
+    VStack(alignment: .leading, spacing: 10) {
+      HStack {
+        Text("Brightness")
+          .font(.system(.headline, design: .rounded).weight(.semibold))
+        Spacer()
+        Text("\(Int(hub.lampBrightness.rounded()))")
+          .font(.system(.title3, design: .rounded).weight(.bold).monospacedDigit())
+          .foregroundStyle(Color(hex: previewHex)?.opacity(0.95) ?? .primary)
+      }
+      Slider(value: brightnessSliderBinding, in: 0 ... 255, step: 1)
+        .tint(Color(hex: previewHex) ?? .pink)
     }
   }
 
@@ -319,21 +335,6 @@ struct ContentView: View {
     }
   }
 
-  private var brightnessSection: some View {
-    VStack(alignment: .leading, spacing: 10) {
-      HStack {
-        Text("Glow")
-          .font(.system(.headline, design: .rounded).weight(.semibold))
-        Spacer()
-        Text("\(Int(hub.lampBrightness.rounded()))")
-          .font(.system(.title3, design: .rounded).weight(.bold).monospacedDigit())
-          .foregroundStyle(Color(hex: previewHex)?.opacity(0.95) ?? .primary)
-      }
-      Slider(value: brightnessSliderBinding, in: 0 ... 255, step: 1)
-        .tint(Color(hex: previewHex) ?? .pink)
-    }
-  }
-
   private var customColorSection: some View {
     VStack(alignment: .leading, spacing: 14) {
       HStack(alignment: .center, spacing: 10) {
@@ -421,30 +422,17 @@ struct ContentView: View {
 
   private var appearanceSection: some View {
     VStack(alignment: .leading, spacing: 12) {
-      Toggle(isOn: Binding(
-        get: {
-          AppearancePreference(rawValue: appearanceRaw) != .system
-        },
-        set: { fixed in
-          if fixed {
-            appearanceRaw = (colorScheme == .dark ? AppearancePreference.dark : AppearancePreference.light).rawValue
-          } else {
-            appearanceRaw = AppearancePreference.system.rawValue
-          }
-        }
-      )) {
-        Text("Fixed day/night look")
-          .font(.system(.subheadline, design: .rounded).weight(.semibold))
-      }
-      .tint(.indigo)
+      Text("Theme")
+        .font(.system(.subheadline, design: .rounded).weight(.semibold))
+        .foregroundStyle(.secondary)
 
-      if AppearancePreference(rawValue: appearanceRaw) != .system {
-        Picker("Interface", selection: appearancePreference) {
-          Text("Light").tag(AppearancePreference.light)
-          Text("Dark").tag(AppearancePreference.dark)
-        }
-        .pickerStyle(.segmented)
+      Picker("Theme", selection: appearancePreference) {
+        Text("Auto").tag(AppearancePreference.system)
+        Text("Light").tag(AppearancePreference.light)
+        Text("Dark").tag(AppearancePreference.dark)
       }
+      .pickerStyle(.segmented)
+      .tint(.indigo)
     }
   }
 
@@ -483,6 +471,11 @@ struct ContentView: View {
 
   @ViewBuilder
   private func moodTile(_ preset: MoodPreset, isSelected: Bool) -> some View {
+    let selectedOnDarkCanvas = isSelected && colorScheme == .dark
+    let moodTitleColor = selectedOnDarkCanvas
+      ? Color(red: 0.11, green: 0.11, blue: 0.13)
+      : Color.primary
+
     Button {
       hub.clearInsightHeartContextForManualSelection()
       selectedMoodId = preset.id
@@ -506,6 +499,7 @@ struct ContentView: View {
         }
         Text(preset.title)
           .font(.system(.headline, design: .rounded).weight(.bold))
+          .foregroundStyle(moodTitleColor)
       }
       .frame(maxWidth: .infinity, alignment: .leading)
       .padding(14)

@@ -9,8 +9,10 @@ import logging
 import math
 import os
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import httpx
 from dotenv import load_dotenv
@@ -118,28 +120,46 @@ def require_api_key(x_api_key: str | None) -> None:
         raise HTTPException(status_code=401, detail="unauthorized")
 
 
-CLAUDE_SYSTEM = """You classify a short chronological heart-rate (BPM) window into exactly one mood for ambient lighting rules.
+def _now_in_user_tz(time_zone_id: str) -> dict[str, str]:
+    """Authoritative local clock in the user's zone (server-computed; avoids client date drift)."""
+    tz_id = (time_zone_id or "").strip() or "UTC"
+    try:
+        tz = ZoneInfo(tz_id)
+    except Exception:
+        tz = ZoneInfo("UTC")
+        tz_id = "UTC"
+    n = datetime.now(tz)
+    wd = n.strftime("%a")
+    date_iso = n.strftime("%Y-%m-%d")
+    hm = n.strftime("%H:%M")
+    hour = n.hour
+    if 5 <= hour < 12:
+        period = "morning"
+    elif 12 <= hour < 17:
+        period = "afternoon"
+    elif 17 <= hour < 22:
+        period = "evening"
+    else:
+        period = "night"
+    # Single compact line Claude must treat as ground truth for weekday + time-of-day
+    one = f"{wd} {date_iso} {hm} {tz_id} {period}"
+    return {"date_iso": date_iso, "one_liner": one, "period": period}
 
-Categories (pick exactly one JSON value for "mood"):
-- calm: Steady BPM near baseline, low jitter (e.g. [70, 71, 70, 72, 70]).
-- stressed: Sudden sharp erratic BPM spike upward without gradual buildup while implied at rest (e.g. [72, 75, 88, 95, 102]).
-- happy: Smooth gradual rise to a sustained higher BPM / flow excitement (e.g. [75, 78, 82, 85, 86]).
-- sad: BPM slightly below the user's normal resting baseline, very flat and low energy (e.g. [64, 63, 63, 64, 62]).
 
-You receive resting_bpm (may be null) and bpms oldest→newest. Prefer physiological pattern shape over stereotypes.
-
-Respond with ONLY a JSON object, no markdown, in this exact shape:
-{"mood":"calm|stressed|happy|sad","reason":"<one short phrase>"}
-"""
+# Tokens kept small: short rules + low max_tokens on the API call.
+CLAUDE_SYSTEM = """JSON only, no markdown: {"mood":"calm|stressed|happy|sad","reason":"<≤12 words>"}
+calm=steady near baseline; stressed=sharp jumps; happy=smooth up; sad=flat low vs baseline.
+Input: resting_bpm?, bpms oldest→newest. Shape over stereotypes."""
 
 
 async def classify_claude(resting_bpm: float | None, bpms: list[float]) -> tuple[str, str]:
-    payload = {"resting_bpm": resting_bpm, "bpms": bpms}
+    b = bpms[-16:] if len(bpms) > 16 else bpms
+    payload = {"resting_bpm": resting_bpm, "bpms": b}
     user_text = json.dumps(payload, separators=(",", ":"))
 
     body = {
         "model": CLAUDE_MODEL,
-        "max_tokens": 256,
+        "max_tokens": 128,
         "system": CLAUDE_SYSTEM,
         "messages": [{"role": "user", "content": user_text}],
     }
@@ -210,21 +230,11 @@ def pack_state(device_id: str, mood: str, reason: str, source: str) -> dict[str,
     return state
 
 
-EXPLAIN_MOOD_SYSTEM = """You write UI microcopy for "Little Lamp", a cozy heart-rate aware accent light.
-
-The user sees one of these moods: calm, stressed, happy, sad.
-
-Output exactly ONE friendly sentence (max 260 characters) that explains why the lamp might feel like this mood right now.
-
-Rules:
-- When heart_rate_context is present (resting BPM, recent BPM samples, classifier_reason): still blend in everyday life — do NOT rely on pulse alone. In the same sentence, combine (a) gentle, non-clinical hints about rhythm or BPM pattern (steady, uptick, jitter, etc.) with (b) at least one contextual angle informed by local_date and time_zone — e.g. weekday vs weekend energy, season or holiday-season vibe, morning vs evening feel, indoor coziness vs bright-day mood, weather-ish atmosphere (without claiming a live forecast). No diagnoses or medical claims.
-- When heart_rate_context is absent or empty: do NOT claim you measured vitals. Use 2–3 playful everyday possibilities — weather vibe, weekend vs weekday, seasonal hint, time-of-day energy — inclusive and light.
-- Tone matches the mood (calm = soft; stressed = sympathetic; happy = warm; sad = gentle).
-- Plain text only — no markdown, no bullet symbols.
-
-Respond ONLY with JSON in this exact shape:
-{"caption":"<single sentence>"}
-"""
+EXPLAIN_MOOD_SYSTEM = """JSON only: {"caption":"<one sentence ≤200 chars>"}
+Input keys: m=mood (calm|stressed|happy|sad), n=authoritative local now (weekday date clock tz period)—use n as the ONLY source for weekday and time-of-day; never contradict n.
+h=null or {r: resting BPM?, b: last BPM samples[], c: classifier phrase?, s: source?}. No diagnoses.
+If h set: blend gentle pulse hints + life context from n (weekend/weekday/season/evening etc.). If h null: everyday hints from n only (no vitals).
+Plain text in caption, no markdown."""
 
 
 def pack_manual(
@@ -328,7 +338,7 @@ def _fallback_explain_caption(
 async def explain_mood_caption_claude(payload_user: dict[str, Any]) -> str:
     body = {
         "model": CLAUDE_MODEL,
-        "max_tokens": 320,
+        "max_tokens": 120,
         "system": EXPLAIN_MOOD_SYSTEM,
         "messages": [{"role": "user", "content": json.dumps(payload_user, separators=(",", ":"))}],
     }
@@ -361,7 +371,7 @@ async def explain_mood_caption_claude(payload_user: dict[str, Any]) -> str:
     cap = str(parsed.get("caption", "")).strip()
     if not cap:
         raise ValueError("empty caption")
-    return cap[:400]
+    return cap[:220]
 
 
 class ExplainMoodBody(BaseModel):
@@ -535,20 +545,31 @@ async def explain_mood(
 
     has_hr = bool(rb) or (resting is not None) or bool(cr_signal)
 
-    heart_rate_context: dict[str, Any] | None = None
-    if has_hr:
-        heart_rate_context = {
-            "resting_bpm": resting,
-            "recent_bpms_oldest_to_newest": list(rb or []),
-            "classifier_reason": cr_signal,
-            "analyze_source": (body.analyzeSource or "").strip(),
-        }
+    now_ctx = _now_in_user_tz(body.timeZoneId)
+    # Fallback copy uses the same calendar date as Claude (timezone-aware on server)
+    local_date_for_fallback = now_ctx["date_iso"]
 
+    h_compact: dict[str, Any] | None = None
+    if has_hr:
+        h_compact = {}
+        if resting is not None:
+            h_compact["r"] = round(float(resting), 1)
+        if rb:
+            tail = rb[-10:]
+            h_compact["b"] = [round(float(x), 1) for x in tail]
+        if cr_signal:
+            h_compact["c"] = cr_signal[:100]
+        src = (body.analyzeSource or "").strip()
+        if src:
+            h_compact["s"] = src[:24]
+        if len(h_compact) == 0:
+            h_compact = None
+
+    # Minimal user message: short keys, tiny payload
     payload_user = {
-        "mood": body.mood,
-        "local_date": body.localDate,
-        "time_zone": body.timeZoneId,
-        "heart_rate_context": heart_rate_context,
+        "m": body.mood,
+        "n": now_ctx["one_liner"],
+        "h": h_compact,
     }
 
     caption = ""
@@ -562,7 +583,7 @@ async def explain_mood(
                 has_hr=has_hr,
                 classifier_reason=(cr_signal or None),
                 recent_bpms=rb,
-                local_date=body.localDate,
+                local_date=local_date_for_fallback,
             )
     else:
         caption = _fallback_explain_caption(
@@ -570,7 +591,7 @@ async def explain_mood(
             has_hr=has_hr,
             classifier_reason=(cr_signal or None),
             recent_bpms=rb,
-            local_date=body.localDate,
+            local_date=local_date_for_fallback,
         )
 
     return {"ok": True, "caption": caption}
