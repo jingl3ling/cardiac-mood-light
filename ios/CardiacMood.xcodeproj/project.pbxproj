@@ -294,7 +294,7 @@
 				DEVELOPMENT_TEAM = 877MZL68G8;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Cardiac Mood";
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "Reads resting heart rate to compare BPM windows against your baseline for the demo lamp";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Reads heart rate and resting heart rate from Health (including Apple Watch) to show your latest BPM on screen and for lamp moods.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -377,7 +377,7 @@
 				DEVELOPMENT_TEAM = 877MZL68G8;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Cardiac Mood";
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "Reads resting heart rate to compare BPM windows against your baseline for the demo lamp";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Reads heart rate and resting heart rate from Health (including Apple Watch) to show your latest BPM on screen and for lamp moods.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";

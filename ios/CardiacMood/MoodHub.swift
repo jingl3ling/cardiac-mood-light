@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import HealthKit
 import SwiftUI
 import WatchConnectivity
 
@@ -16,6 +17,10 @@ final class MoodHub: NSObject, ObservableObject {
   @Published var isSending = false
   @Published var lastError = ""
   @Published var watchSessionActive = false
+  /// Latest heart rate sample from Health (Apple Watch → Health on iPhone).
+  @Published var latestAppleHealthHeartRateBpm: Double?
+  /// When BPM is set: short time string ("3:42 PM"). When nil: status / empty-state message.
+  @Published var appleHealthHeartRateDetail: String = ""
   /// Mirrors server brightness for the lamp slider (0…255).
   @Published var lampBrightness: Double = 120
   @Published var lampPowerOn = true
@@ -63,9 +68,40 @@ final class MoodHub: NSObject, ObservableObject {
     do {
       try await baseline.requestAuthorization()
       authorizationStatus = "Health authorized"
+      await refreshLatestHeartRateFromHealth()
     } catch {
       authorizationStatus = "Health authorization failed"
       lastError = String(describing: error)
+    }
+  }
+
+  /// Loads the most recent heart rate quantity sample from HealthKit (same data you see in the Health app).
+  func refreshLatestHeartRateFromHealth() async {
+    guard baseline.isHealthDataAvailable() else {
+      latestAppleHealthHeartRateBpm = nil
+      appleHealthHeartRateDetail = "Health not available on this device."
+      return
+    }
+
+    let status = baseline.heartRateReadAuthorizationStatus()
+    if status == .sharingDenied {
+      latestAppleHealthHeartRateBpm = nil
+      appleHealthHeartRateDetail = "Heart rate access denied — enable in Settings › Privacy & Security › Health."
+      return
+    }
+
+    if let sample = await baseline.latestHeartRateSample() {
+      latestAppleHealthHeartRateBpm = sample.bpm
+      let t = DateFormatter.localizedString(from: sample.endDate, dateStyle: .none, timeStyle: .short)
+      appleHealthHeartRateDetail = "Updated \(t)"
+      return
+    }
+
+    latestAppleHealthHeartRateBpm = nil
+    if status == .notDetermined {
+      appleHealthHeartRateDetail = "Tap Health access below to read heart rate from Health."
+    } else {
+      appleHealthHeartRateDetail = "No heart rate in Health yet. Sync your Apple Watch or record a workout."
     }
   }
 

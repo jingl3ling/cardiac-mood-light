@@ -31,6 +31,7 @@ private enum AppearancePreference: String, CaseIterable, Identifiable {
 struct ContentView: View {
   @EnvironmentObject private var hub: MoodHub
   @Environment(\.colorScheme) private var colorScheme
+  @Environment(\.scenePhase) private var scenePhase
 
   /// Overrides system light/dark when not `system` (same idea as day vs night).
   @AppStorage("littleLampAppearance") private var appearanceRaw = AppearancePreference.system.rawValue
@@ -137,6 +138,9 @@ struct ContentView: View {
           .padding(.horizontal, 18)
           .padding(.bottom, 28)
         }
+        .refreshable {
+          await hub.refreshLatestHeartRateFromHealth()
+        }
       }
       .preferredColorScheme(resolvedPreferredColorScheme)
       .navigationTitle("Little Lamp ✨")
@@ -175,6 +179,11 @@ struct ContentView: View {
     }
     .task {
       await hub.authorizeHealthIfNeeded()
+      await hub.refreshLatestHeartRateFromHealth()
+    }
+    .onChange(of: scenePhase) { _, phase in
+      guard phase == .active else { return }
+      Task { await hub.refreshLatestHeartRateFromHealth() }
     }
     .onAppear {
       if validMoods.contains(hub.lastMood) {
@@ -270,6 +279,8 @@ struct ContentView: View {
         }
       }
 
+      appleHealthHeartRateSection
+
       Divider().opacity(0.35)
 
       HStack(alignment: .center, spacing: 10) {
@@ -331,6 +342,32 @@ struct ContentView: View {
         Text(hub.lastError)
           .font(.system(.caption, design: .rounded))
           .foregroundStyle(.red)
+      }
+    }
+  }
+
+  private var appleHealthHeartRateSection: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Label("Latest from Health", systemImage: "heart.circle.fill")
+        .font(.system(.subheadline, design: .rounded).weight(.bold))
+        .foregroundStyle(.secondary)
+      if let bpm = hub.latestAppleHealthHeartRateBpm {
+        HStack(alignment: .firstTextBaseline) {
+          Text("\(Int(bpm.rounded())) BPM")
+            .font(.system(.title2, design: .rounded).weight(.bold))
+            .monospacedDigit()
+            .foregroundStyle(.primary)
+          Spacer(minLength: 8)
+          Text(hub.appleHealthHeartRateDetail)
+            .font(.system(.caption, design: .rounded))
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.trailing)
+        }
+      } else {
+        Text(hub.appleHealthHeartRateDetail)
+          .font(.system(.caption, design: .rounded))
+          .foregroundStyle(.secondary)
+          .fixedSize(horizontal: false, vertical: true)
       }
     }
   }
