@@ -12,10 +12,6 @@
 #include <FastLED.h>
 #include <math.h>
 
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
-
 #define CARDIAC_DEBUG 1
 
 static const char *WIFI_SSID = "ARRIS-1165";
@@ -32,6 +28,7 @@ static const char *API_KEY = "dev-change-me";
 static const int LED_PIN = 13;
 static const int NUM_LEDS = 8;
 static const unsigned long POLL_MS = 1200;
+static const unsigned long POLL_MS_BLINK = 400;
 static const unsigned long WIFI_TIMEOUT_MS = 30000;
 static const unsigned long WIFI_RETRY_MS = 10000;
 
@@ -64,13 +61,12 @@ static void showWifiConnecting() {
   FastLED.show();
 }
 
+/** Brief GET failure: hold last mood color, dimmed — no red flash (avoids alarming random red). */
 static void showHttpFail() {
-  static uint32_t t = 0;
-  if (millis() - t < 200) return;
-  t = millis();
-  static bool b;
-  b = !b;
-  fill_solid(leds, NUM_LEDS, b ? CRGB(80, 0, 0) : g_solid);
+  fill_solid(leds, NUM_LEDS, g_solid);
+  int dim = max(12, g_masterBrightness / 5);
+  if (dim > 255) dim = 255;
+  FastLED.setBrightness((uint8_t)dim);
   FastLED.show();
 }
 
@@ -116,11 +112,20 @@ static void renderLeds() {
     float bpm = g_blinkBpm;
     if (bpm < 30.0f) bpm = 30.0f;
     if (bpm > 220.0f) bpm = 220.0f;
+    // One heartbeat per full cycle (matches BPM from phone / Health → GET latest → blinkBpm).
     float periodMs = 60000.0f / bpm;
     float phase = fmodf((float)millis(), periodMs) / periodMs;
-    float pulse = (sinf(phase * 2.0f * (float)M_PI) + 1.0f) * 0.5f;
-    int minB = 10;
-    int b = minB + (int)(pulse * (float)(g_masterBrightness - minB));
+    bool lightHalf = phase < 0.5f;
+
+    int hi = g_masterBrightness;
+    if (hi < 1) hi = 1;
+    if (hi > 255) hi = 255;
+    // Same hue: FastLED scales RGB together — light vs darker shade only (no hue shift).
+    int lo = (int)((float)hi * 0.22f);
+    if (lo < 10) lo = 10;
+    if (lo >= hi) lo = hi / 4;
+
+    int b = lightHalf ? hi : lo;
     if (b < 0) b = 0;
     if (b > 255) b = 255;
     fill_solid(leds, NUM_LEDS, g_solid);
@@ -192,6 +197,7 @@ static bool fetchCardiac() {
   if (API_KEY[0] != '\0') {
     http.addHeader("x-api-key", API_KEY);
   }
+  http.setTimeout(4500);
   int code = http.GET();
   String body = http.getString();
   http.end();
@@ -277,7 +283,8 @@ void loop() {
   g_wifiUp = true;
 
   unsigned long now = millis();
-  if (now - lastFetch >= POLL_MS) {
+  unsigned long interval = (g_blinkEnabled && g_powerOn) ? POLL_MS_BLINK : POLL_MS;
+  if (now - lastFetch >= interval) {
     lastFetch = now;
     if (!fetchCardiac()) {
       Serial.println(F("fetch failed"));

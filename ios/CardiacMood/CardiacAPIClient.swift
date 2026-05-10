@@ -58,6 +58,12 @@ struct ManualLampRequestBody: Codable {
   let moodLabel: String?
 }
 
+struct SyncBlinkRequestBody: Codable {
+  let deviceId: String
+  let blinkBpm: Double
+  let blinkEnabled: Bool
+}
+
 enum CardiacAPIError: Error {
   case badStatus(Int)
   case decodeFailed
@@ -118,6 +124,23 @@ struct CardiacAPIClient {
       blinkBpm: bpm,
       moodLabel: moodLabel
     )
+    req.httpBody = try JSONEncoder().encode(body)
+
+    let (data, resp) = try await session.data(for: req)
+    guard let http = resp as? HTTPURLResponse else { throw CardiacAPIError.badStatus(-1) }
+    guard (200 ... 299).contains(http.statusCode) else { throw CardiacAPIError.badStatus(http.statusCode) }
+    return try JSONDecoder().decode(AnalyzeResponseBody.self, from: data)
+  }
+
+  func syncBlink(deviceId: String, blinkBpm: Double, blinkEnabled: Bool) async throws -> AnalyzeResponseBody {
+    var req = URLRequest(url: Config.baseURL.appendingPathComponent("/v1/cardiac/sync-blink"))
+    req.httpMethod = "POST"
+    req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    if !Config.apiKey.isEmpty {
+      req.setValue(Config.apiKey, forHTTPHeaderField: "x-api-key")
+    }
+    let bpm = min(220, max(30, blinkBpm))
+    let body = SyncBlinkRequestBody(deviceId: deviceId, blinkBpm: bpm, blinkEnabled: blinkEnabled)
     req.httpBody = try JSONEncoder().encode(body)
 
     let (data, resp) = try await session.data(for: req)

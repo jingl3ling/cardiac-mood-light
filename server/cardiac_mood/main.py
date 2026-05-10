@@ -10,7 +10,6 @@ import math
 import os
 import time
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -18,7 +17,6 @@ import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
 
 from cardiac_mood.classifier import classify_heuristic
@@ -120,6 +118,14 @@ class ManualLampBody(BaseModel):
             return None
         s = v.strip()
         return s if s else None
+
+
+class SyncBlinkBody(BaseModel):
+    """Update blink fields only — does not change stored color (see `/manual` + manualVisualLock)."""
+
+    deviceId: str = Field(..., min_length=1, max_length=128)
+    blinkBpm: float = Field(..., ge=30.0, le=220.0)
+    blinkEnabled: bool = Field(False)
 
 
 def require_api_key(x_api_key: str | None) -> None:
@@ -228,21 +234,32 @@ def _prev_extras(device_id: str) -> tuple[bool, bool, float]:
 
 
 def pack_state(device_id: str, mood: str, reason: str, source: str) -> dict[str, Any]:
-    """Analyze path: keep lamp power + blink settings from last manual/device state."""
+    """Analyze path: keep power/blink extras; keep color/brightness/label if user chose them via /manual."""
     st = STYLE[mood]
+    prev = _STORE.get(device_id) or {}
     power_on, blink_en, bpm = _prev_extras(device_id)
+    lock = bool(prev.get("manualVisualLock"))
+    if lock:
+        color = str(prev.get("color", st["color"]))
+        brightness = int(prev.get("brightness", st["brightness"]))
+        label = str(prev.get("label", st["label"]))
+    else:
+        color = st["color"]
+        brightness = int(st["brightness"])
+        label = st["label"]
     state = {
         "deviceId": device_id,
         "mood": mood,
-        "label": st["label"],
-        "color": st["color"],
-        "brightness": int(st["brightness"]),
+        "label": label,
+        "color": color,
+        "brightness": brightness,
         "reason": reason,
         "source": source,
         "updatedAt": time.time(),
         "powerOn": power_on,
         "blinkEnabled": blink_en,
         "blinkBpm": bpm,
+        "manualVisualLock": lock,
     }
     _STORE[device_id] = state
     return state
@@ -268,8 +285,23 @@ def pack_manual(
     custom_label: str | None,
 ) -> dict[str, Any]:
     st = STYLE[mood]
-    color = color_override if color_override else st["color"]
-    label = custom_label if custom_label else st["label"]
+    prev = _STORE.get(device_id) or {}
+    lock = bool(prev.get("manualVisualLock"))
+
+    if color_override:
+        color = color_override
+    elif lock and prev.get("color"):
+        color = str(prev["color"])
+    else:
+        color = st["color"]
+
+    if custom_label:
+        label = custom_label
+    elif lock and prev.get("label"):
+        label = str(prev["label"])
+    else:
+        label = st["label"]
+
     bpm = max(30.0, min(220.0, float(blink_bpm)))
     state = {
         "deviceId": device_id,
@@ -283,6 +315,7 @@ def pack_manual(
         "powerOn": power_on,
         "blinkEnabled": blink_enabled,
         "blinkBpm": bpm,
+        "manualVisualLock": True,
     }
     _STORE[device_id] = state
     return state
@@ -532,9 +565,9 @@ _INDEX_HTML = """<!DOCTYPE html>
     <li><a href="/docs">OpenAPI docs</a> — <code>GET /docs</code></li>
     <li><code>POST /v1/cardiac/analyze</code> — analyze BPM window (requires <code>x-api-key</code> when configured)</li>
     <li><code>POST /v1/cardiac/manual</code> — set color/brightness from phone (requires <code>x-api-key</code> when configured)</li>
+    <li><code>POST /v1/cardiac/sync-blink</code> — update blink BPM only (requires <code>x-api-key</code> when configured)</li>
     <li><code>POST /v1/cardiac/explain-mood</code> — Claude mood caption for the iOS lamp UI (requires <code>x-api-key</code> when configured)</li>
     <li><code>GET /v1/cardiac/latest</code> — latest mood for ESP32 (requires <code>x-api-key</code> when configured)</li>
-    <li><a href="/app/">Little Lamp web tester</a> — same flows as the iOS app (manual lamp, analyze simulator, mood caption)</li>
   </ul>
 </body>
 </html>"""
@@ -616,6 +649,47 @@ async def manual_lamp(
         blink_bpm=body.blinkBpm,
         custom_label=body.moodLabel,
     )
+    return {
+        "ok": True,
+        "mood": state["mood"],
+        "label": state["label"],
+        "color": state["color"],
+        "brightness": state["brightness"],
+        "reason": state["reason"],
+        "source": state["source"],
+        "updatedAt": state["updatedAt"],
+        "powerOn": state["powerOn"],
+        "blinkEnabled": state["blinkEnabled"],
+        "blinkBpm": state["blinkBpm"],
+    }
+
+
+@app.post("/v1/cardiac/sync-blink")
+async def sync_blink(
+    body: SyncBlinkBody,
+    x_api_key: str | None = Header(default=None, alias="x-api-key"),
+) -> dict[str, Any]:
+    """Heartbeat BPM for ESP — does not rewrite lamp color/mood."""
+    require_api_key(x_api_key)
+    bpm = max(30.0, min(220.0, float(body.blinkBpm)))
+    row = _STORE.get(body.deviceId)
+    if row:
+        row["blinkBpm"] = bpm
+        row["blinkEnabled"] = bool(body.blinkEnabled)
+        row["updatedAt"] = time.time()
+        _STORE[body.deviceId] = row
+        state = row
+    else:
+        state = pack_manual(
+            body.deviceId,
+            "calm",
+            DEFAULT_LAMP_BRIGHTNESS,
+            None,
+            power_on=True,
+            blink_enabled=body.blinkEnabled,
+            blink_bpm=bpm,
+            custom_label=None,
+        )
     return {
         "ok": True,
         "mood": state["mood"],
@@ -726,10 +800,3 @@ def latest(
     }
 
 
-_WEB_DIR = Path(__file__).resolve().parent / "web"
-if _WEB_DIR.is_dir():
-    app.mount(
-        "/app",
-        StaticFiles(directory=str(_WEB_DIR), html=True),
-        name="little_lamp_web",
-    )

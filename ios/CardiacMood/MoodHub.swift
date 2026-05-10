@@ -216,22 +216,25 @@ final class MoodHub: NSObject, ObservableObject {
     return h
   }
 
-  /// Blink BPM tracks “Latest from Health”; push lamp state without clearing HR insight context.
+  /// Blink BPM from Health — uses `/sync-blink` only so we never POST `/manual` without a color and reset the lamp palette.
   private func syncBlinkBpmFromLatestHealthAndPushIfNeeded() async {
     guard let hr = latestAppleHealthHeartRateBpm else { return }
     let clamped = min(220.0, max(30.0, hr))
-    guard abs(clamped - blinkBpm) >= 0.2 else { return }
+    let prev = blinkBpm
     blinkBpm = clamped
-    await pushManualLamp(
-      mood: moodKeyForLampAPI(),
-      brightness: Int(min(255, max(0, lampBrightness.rounded()))),
-      colorHexOverride: optionalColorHexForLampSync(),
-      powerOn: lampPowerOn,
-      blinkEnabled: blinkEnabled,
-      blinkBpm: blinkBpm,
-      moodLabel: nil,
-      preserveInsightContext: true
-    )
+    let delta = abs(clamped - prev)
+    guard blinkEnabled || delta >= 0.2 else { return }
+    do {
+      let resp = try await api.syncBlink(
+        deviceId: Config.deviceId,
+        blinkBpm: blinkBpm,
+        blinkEnabled: blinkEnabled
+      )
+      applyAnalyzeResponse(resp)
+      lastError = ""
+    } catch {
+      lastError = String(describing: error)
+    }
   }
 
   @discardableResult

@@ -18,7 +18,7 @@ private let moodPresets: [MoodPreset] = [
 
 private let validMoods = Set(moodPresets.map(\.id))
 
-private let lampSyncDebounceNs: UInt64 = 260_000_000
+private let lampSyncDebounceNs: UInt64 = 100_000_000
 
 private enum AppearancePreference: String, CaseIterable, Identifiable {
   case system
@@ -227,9 +227,41 @@ struct ContentView: View {
     }
   }
 
-  private var lampPreviewRow: some View {
-    HStack(alignment: .center, spacing: 16) {
-      ZStack {
+  /// Same timing as the lamp: period `60/BPM` s — prefers live Health BPM when shown; two shades only (matches ESP dim ratio ~22%).
+  @ViewBuilder
+  private var lampPreviewOrb: some View {
+    Group {
+      if hub.blinkEnabled && hub.lampPowerOn {
+        TimelineView(.periodic(from: .now, by: 1.0 / 30.0)) { context in
+          let live = hub.latestAppleHealthHeartRateBpm.map { min(220.0, max(30.0, $0)) }
+          let bpm = live ?? max(30.0, min(220.0, hub.blinkBpm))
+          let period = 60.0 / bpm
+          let raw = context.date.timeIntervalSinceReferenceDate
+          let rem = raw.truncatingRemainder(dividingBy: period)
+          let aligned = rem < 0 ? rem + period : rem
+          let phase = aligned / period
+          let lightHalf = phase < 0.5
+          let oOuter = lightHalf ? 0.95 : 0.21
+          let oInner = lightHalf ? 0.35 : 0.077
+          Circle()
+            .fill(
+              RadialGradient(
+                colors: [
+                  (Color(hex: previewHex) ?? .pink).opacity(oOuter),
+                  (Color(hex: previewHex) ?? .purple).opacity(oInner),
+                ],
+                center: .center,
+                startRadius: 4,
+                endRadius: 52
+              )
+            )
+            .shadow(
+              color: (Color(hex: previewHex) ?? .clear).opacity(lightHalf ? 0.45 : 0.11),
+              radius: lightHalf ? 14 : 9,
+              y: 6
+            )
+        }
+      } else {
         Circle()
           .fill(
             RadialGradient(
@@ -242,12 +274,24 @@ struct ContentView: View {
               endRadius: 52
             )
           )
-          .frame(width: 88, height: 88)
-          .overlay {
-            Circle()
-              .strokeBorder(.white.opacity(0.35), lineWidth: 2)
-          }
-          .shadow(color: (Color(hex: previewHex) ?? .clear).opacity(hub.lampPowerOn ? 0.45 : 0.15), radius: hub.blinkEnabled ? 14 : 10, y: 6)
+          .shadow(
+            color: (Color(hex: previewHex) ?? .clear).opacity(hub.lampPowerOn ? 0.45 : 0.15),
+            radius: 10,
+            y: 6
+          )
+      }
+    }
+    .frame(width: 88, height: 88)
+    .overlay {
+      Circle()
+        .strokeBorder(.white.opacity(0.35), lineWidth: 2)
+    }
+  }
+
+  private var lampPreviewRow: some View {
+    HStack(alignment: .center, spacing: 16) {
+      ZStack {
+        lampPreviewOrb
 
         Image(systemName: hub.blinkEnabled ? "heart.circle.fill" : "sparkles")
           .font(.system(size: 28))
