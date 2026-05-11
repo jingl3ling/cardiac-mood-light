@@ -2,3 +2,7 @@ server/.venv/
 **/__pycache__/
 **/*.pyc
 .DS_Store
+
+# Xcode — per-user UI state, schemes, etc. (not for the repo)
+**/xcuserdata/
+*.xcuserstate
