@@ -44,7 +44,7 @@ struct ViewerRootView: View {
           .padding(.bottom, 28)
         }
         .refreshable {
-          await model.refresh()
+          await model.refresh(forceFamilyInsightRegeneration: true)
         }
       }
       .navigationTitle("Little Lamp · Family ✨")

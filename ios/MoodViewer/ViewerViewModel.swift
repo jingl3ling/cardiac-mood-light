@@ -26,17 +26,28 @@ final class ViewerViewModel: ObservableObject {
   /// Watch app-group pings at ~1 Hz (cheap reads); unconditional `/latest` less often so radio stays asleep when nothing changed.
   private let fastWakeCheckSeconds: Double = 1
   /// Every N fast ticks, GET `/latest` anyway — needed when Little Lamp runs on another device (App Group beacon is same-phone only).
-  private let unconditionalRefreshEveryTicks = 6
+  private let unconditionalRefreshEveryTicks = 10
 
   private var viewerCaptionGeneration = 0
   private var viewerInsightFetchedForKey: String?
+  /// Mood used for the last successful family insight response; suppresses duplicate `/explain-mood-viewer` while mood is stable.
+  private var lastFetchedFamilyInsightMoodLower: String?
+  /// True after `refresh(forceFamilyInsightRegeneration:)` (e.g. pull-to-refresh); bypasses mood-only cache for one generation pass.
+  private var pendingForceFamilyInsightRegeneration = false
 
   private static let viewerMoods: Set<String> = ["calm", "stressed", "happy", "sad"]
+
+  private static func normalizedMood(_ s: LatestStateDTO?) -> String? {
+    guard let raw = s?.mood.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+      !raw.isEmpty, viewerMoods.contains(raw)
+    else { return nil }
+    return raw
+  }
 
   func startPolling() {
     if familyLampDarwinBox == nil {
       let box = MoodViewerFamilyDarwinBox { [weak self] in
-        Task { @MainActor in await self?.refresh() }
+        Task { @MainActor in await self?.refresh(forceFamilyInsightRegeneration: false) }
       }
       familyLampDarwinBox = box
       CFNotificationCenterAddObserver(
@@ -57,7 +68,7 @@ final class ViewerViewModel: ObservableObject {
         tick += 1
         if tick >= unconditionalRefreshEveryTicks {
           tick = 0
-          await refresh()
+          await refresh(forceFamilyInsightRegeneration: false)
         }
         try? await Task.sleep(nanoseconds: UInt64(max(0.35, fastWakeCheckSeconds) * 1_000_000_000))
       }
@@ -78,25 +89,46 @@ final class ViewerViewModel: ObservableObject {
     if stamp <= handledBeaconThrough {
       return
     }
-    await refresh()
+    await refresh(forceFamilyInsightRegeneration: false)
   }
 
-  func refresh() async {
+  func refresh(forceFamilyInsightRegeneration: Bool = false) async {
+    if forceFamilyInsightRegeneration {
+      pendingForceFamilyInsightRegeneration = true
+      viewerFamilyCaptionError = ""
+      lastFetchedFamilyInsightMoodLower = nil
+      viewerInsightFetchedForKey = nil
+    }
+
+    let moodBeforeFetch = Self.normalizedMood(lampState)
+
     do {
       let s = try await api.getLatest(deviceId: Config.deviceId)
+      let moodAfterFetch = Self.normalizedMood(s)
+
       lampState = s
       statusMessage = ""
       handledBeaconThrough = max(handledBeaconThrough, FamilySyncBeacon.lastMainAppServerMutationAt())
-      if viewerFamilyCaptionContextKey() != viewerInsightFetchedForKey {
+
+      let moodChanged = moodBeforeFetch != moodAfterFetch
+
+      let keyNow = viewerFamilyCaptionContextKey()
+      if let keyNow, keyNow != viewerInsightFetchedForKey {
         viewerFamilyCaption = ""
         viewerFamilyCaptionError = ""
       }
-      scheduleViewerFamilyCaptionGeneration()
+
+      scheduleViewerFamilyInsightIfAppropriate(
+        moodChanged: moodChanged,
+        newKeyIfAny: viewerFamilyCaptionContextKey(),
+        lampMoodNormalized: moodAfterFetch
+      )
     } catch {
       statusMessage = "Could not load lamp state. Check network and API key."
       lampState = nil
       viewerFamilyCaption = ""
       viewerInsightFetchedForKey = nil
+      lastFetchedFamilyInsightMoodLower = nil
       viewerFamilyCaptionLoading = false
     }
   }
@@ -139,7 +171,6 @@ final class ViewerViewModel: ObservableObject {
         appleHealthHeartRateSampleEndAt: lampState?.appleHealthHeartRateSampleEndAt
       )
       statusMessage = ""
-      scheduleViewerFamilyCaptionGeneration()
     } catch {
       statusMessage = "Update failed. Try again."
     }
@@ -169,10 +200,35 @@ final class ViewerViewModel: ObservableObject {
         appleHealthHeartRateSampleEndAt: lampState?.appleHealthHeartRateSampleEndAt
       )
       statusMessage = ""
-      scheduleViewerFamilyCaptionGeneration()
     } catch {
       statusMessage = "Blink update failed."
     }
+  }
+
+  /// Debounced `/explain-mood-viewer` — scheduling is skipped when mood is unchanged and caption already populated (poll stays cheap).
+  private func scheduleViewerFamilyInsightIfAppropriate(
+    moodChanged: Bool,
+    newKeyIfAny: String?,
+    lampMoodNormalized: String?
+  ) {
+    let force = pendingForceFamilyInsightRegeneration
+    /// First successful insight load (`viewerInsightFetchedForKey` stays nil until a network caption lands).
+    let awaitingFirstSuccess =
+      viewerFamilyCaption.isEmpty && viewerFamilyCaptionError.isEmpty
+      && viewerInsightFetchedForKey == nil
+
+    guard force || moodChanged || awaitingFirstSuccess else {
+      return
+    }
+    guard !viewerFamilyCaptionLoading else {
+      /// Avoid canceling an in-flight debounce + request while Claude is already working or debouncing.
+      return
+    }
+    guard lampMoodNormalized != nil, newKeyIfAny != nil else {
+      return
+    }
+
+    scheduleViewerFamilyCaptionGeneration()
   }
 
   private func scheduleViewerFamilyCaptionGeneration() {
@@ -215,12 +271,24 @@ final class ViewerViewModel: ObservableObject {
     return "\(mood)|\(bpmPart)|\(liKey)"
   }
 
+  /// Matches server `STYLE` preset labels — must not be sent as `customMoodName` or stale calm copy overrides stressed/happy moods in family insight.
+  private static let stockLampPresetLabelsLower: Set<String> = [
+    "calm (baseline)",
+    "escalating / stressed",
+    "happy / energetic",
+    "sad / drained",
+  ]
+
   private func customMoodLabelForExplain(_ s: LatestStateDTO) -> String? {
     guard let raw = s.label?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else {
       return nil
     }
     let moodLower = s.mood.lowercased()
     if raw.lowercased() == moodLower { return nil }
+    let low = raw.lowercased()
+    if Self.stockLampPresetLabelsLower.contains(low) {
+      return nil
+    }
     return String(raw.prefix(48))
   }
 
@@ -231,10 +299,24 @@ final class ViewerViewModel: ObservableObject {
       viewerFamilyCaptionError = ""
       return
     }
-    if key == viewerInsightFetchedForKey, !viewerFamilyCaption.isEmpty {
+
+    let forceRegen = pendingForceFamilyInsightRegeneration
+    /// Pull-to-refresh must bypass caches even when BPM / sync note fingerprint matches.
+    if key == viewerInsightFetchedForKey, !viewerFamilyCaption.isEmpty, !forceRegen {
       return
     }
 
+    let moodNow = lampState.flatMap { Self.normalizedMood($0) } ?? ""
+    if !forceRegen,
+      let lastInsightMood = lastFetchedFamilyInsightMoodLower,
+      lastInsightMood == moodNow,
+      !viewerFamilyCaption.isEmpty,
+      viewerFamilyCaptionError.isEmpty
+    {
+      return
+    }
+
+    pendingForceFamilyInsightRegeneration = false
     viewerCaptionGeneration += 1
     let token = viewerCaptionGeneration
     viewerFamilyCaptionLoading = true
@@ -279,6 +361,7 @@ final class ViewerViewModel: ObservableObject {
       guard token == viewerCaptionGeneration else { return }
       viewerFamilyCaption = caption
       viewerInsightFetchedForKey = key
+      lastFetchedFamilyInsightMoodLower = mood
     } catch {
       guard token == viewerCaptionGeneration else { return }
       if viewerFamilyCaption.isEmpty {

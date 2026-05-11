@@ -46,6 +46,16 @@ STYLE: dict[str, dict[str, Any]] = {
     "sad": {"label": "Sad / Drained", "color": "#4169E1", "brightness": DEFAULT_LAMP_BRIGHTNESS},
 }
 
+_STOCK_LAMP_LABELS_LOWER: frozenset[str] = frozenset(
+    str(v["label"]).strip().lower() for v in STYLE.values()
+)
+
+
+def _is_stock_lamp_label(label: str) -> bool:
+    """Preset palette copy must not be treated as a user custom name (avoids “Calm (baseline)” overriding mood m)."""
+    return label.strip().lower() in _STOCK_LAMP_LABELS_LOWER
+
+
 # deviceId -> latest state
 _STORE: dict[str, dict[str, Any]] = {}
 
@@ -153,7 +163,7 @@ def require_api_key(x_api_key: str | None) -> None:
         raise HTTPException(status_code=401, detail="unauthorized")
 
 
-def _now_in_user_tz(time_zone_id: str) -> dict[str, str]:
+def _now_in_user_tz(time_zone_id: str) -> dict[str, Any]:
     """Authoritative local clock in the user's zone (server-computed; avoids client date drift)."""
     tz_id = (time_zone_id or "").strip() or "UTC"
     try:
@@ -166,6 +176,17 @@ def _now_in_user_tz(time_zone_id: str) -> dict[str, str]:
     date_iso = n.strftime("%Y-%m-%d")
     hm = n.strftime("%H:%M")
     hour = n.hour
+    wd_idx = n.weekday()
+    is_weekend = wd_idx >= 5
+    month = n.month
+    if month in (12, 1, 2):
+        season = "winter"
+    elif month in (3, 4, 5):
+        season = "spring"
+    elif month in (6, 7, 8):
+        season = "summer"
+    else:
+        season = "autumn"
     if 5 <= hour < 12:
         period = "morning"
     elif 12 <= hour < 17:
@@ -176,7 +197,14 @@ def _now_in_user_tz(time_zone_id: str) -> dict[str, str]:
         period = "night"
     # Single compact line Claude must treat as ground truth for weekday + time-of-day
     one = f"{wd} {date_iso} {hm} {tz_id} {period}"
-    return {"date_iso": date_iso, "one_liner": one, "period": period}
+    return {
+        "date_iso": date_iso,
+        "one_liner": one,
+        "period": period,
+        "weekday_short": wd,
+        "is_weekend": is_weekend,
+        "season": season,
+    }
 
 
 # Tokens kept small: short rules + low max_tokens on the API call.
@@ -361,12 +389,20 @@ If uf=1 and u set: caption MUST match u's emotion—e.g. scared/fearful→tensio
 Blend HR (h) with n when present; keep one sentence. Plain text, no markdown."""
 
 
-EXPLAIN_MOOD_VIEWER_SYSTEM = """JSON only: {"caption":"<one sentence ≤200 chars>"}
-You write ONLY for someone checking their loved one's Little Lamp from MoodViewer—they are curious and a little tender; be sweet, clear, and easy to picture. Never diagnose or give medical directives.
-STICK TO FACTS YOU ARE GIVEN only: mood palette m (calm=stabilizing calm preset/steady amber family; stressed=wired/red-leaning cue; happy=light pink uplift; sad=quiet blue/downshift). If h lists BPM values, name the approximate number plainly ("pulse sitting near …"). Use n ONLY as a crisp time anchor ("Sunday evening")—never waffle.
-Optional li=Loved one's sync'd sentence from Little Lamp—you may reflect its emotional gist in fresh words—never quote or mimic it. Optional u/uf=lamp label; never override li's emotional truth.
-BANNED: vague filler ("whatever the weather," "however today feels," "life has seasons," astrology, cliché hedging about the universe). Do not invent dinners, fights, bosses, commute, storms, holidays not in payload. If data is sparse, spell out clearly what Little Lamp IS showing instead of fluff.
-Third-person gently ("their lamp…") plus "you're seeing…" OK. Plain text caption, ≤200 chars, no markdown."""
+EXPLAIN_MOOD_VIEWER_SYSTEM = """JSON only: {"caption":"<one sentence ≤200 chars, plain text>"}
+Audience: a family member opening MoodViewer—give one warm, spoken-sounding line (not bullet points, not a brochure).
+
+AUTHORITATIVE MOOD: m is calm | stressed | happy | sad—the lamp palette they literally see. The caption's emotional color MUST match m. If optional u (custom label) or li (sync'd note from the wearer) conflicts with m, follow m for how the glow *feels*; you may still nod to li's subtext gently.
+
+FACTS TO WEAVE IN (only what appears in the JSON):
+• n — their local clock one-liner (weekday, date, time, zone, coarse time-of-day).
+• ctx — {tod, season, weekend}: use to set scene. tod refines morning/afternoon/evening/night; weekend=true vs false shapes the social rhythm; season is for **soft weather texture** (winter's dry cold bite, spring's restless breeze, summer's muggy heat, autumn's crisp edge) as **atmospheric metaphor**, not a real forecast—never name live storms, temps, or "it's raining" unless stated in payload.
+• h — heart data when present: mention BPM in a natural way ("heartbeat ticking near 78").
+• li — optional wearer's sentence: paraphrase the feeling, never quote.
+
+BANNED: medical diagnosis or advice; invented jobs, fights, trips, appointments, holidays, named people, push notifications; astrology; generic therapy-speak ("whatever the universe"). No markdown.
+
+Tone: vivid, intimate, concrete—like a thoughtful text to family. Third person ("their lamp", "you're seeing") is fine. One sentence."""
 
 
 def pack_manual(
@@ -470,7 +506,10 @@ def _viewer_insight_fallback_closing(local_date: str, mood: str) -> str:
         "happy": "light happy pink",
         "sad": "soft blue sadness cue",
     }.get(mood, f"{mood} style")
-    return f"As you peek in on {weekday}, Little Lamp is set to this app's {preset}—that's the concrete snapshot MoodViewer shows you."
+    return (
+        f"As you peek in on {wd}, Little Lamp is showing this app's {preset}—"
+        f"that's the snapshot MoodViewer mirrors for you right now."
+    )
 
 
 def _label_likely_gibberish(label: str) -> bool:
@@ -541,6 +580,8 @@ def _fallback_explain_caption(
     junk = {"", "manual_ios", "claude", "too few samples"}
     everyday = _everyday_context_fragment(local_date, mood)
     cu = (custom_mood_name or "").strip()[:48]
+    if cu and _is_stock_lamp_label(cu):
+        cu = ""
 
     hr_part: str | None = None
     if has_hr and recent_bpms:
@@ -669,6 +710,8 @@ def _explain_mood_user_payload(body: ExplainMoodBody) -> tuple[dict[str, Any], b
         "h": h_compact,
     }
     cu_in = (body.customMoodName or "").strip()[:48]
+    if cu_in and _is_stock_lamp_label(cu_in):
+        cu_in = ""
     if cu_in:
         payload_user["u"] = cu_in
         payload_user["uf"] = 0 if _label_likely_gibberish(cu_in) else 1
@@ -688,6 +731,8 @@ def _fallback_explain_caption_viewer(
     """Deterministic line for MoodViewer while Claude absent."""
     closing = _viewer_insight_fallback_closing(local_date, mood)
     cu = (custom_mood_name or "").strip()[:48]
+    if cu and _is_stock_lamp_label(cu):
+        cu = ""
     li = (lamp_insight or "").strip()
     if li and _looks_like_placeholder_test_note(li):
         li = ""
@@ -717,10 +762,11 @@ async def explain_mood_caption_claude(
     payload_user: dict[str, Any],
     *,
     system: str = EXPLAIN_MOOD_SYSTEM,
+    max_tokens: int = 120,
 ) -> str:
     body = {
         "model": CLAUDE_MODEL,
-        "max_tokens": 120,
+        "max_tokens": max_tokens,
         "system": system,
         "messages": [{"role": "user", "content": json.dumps(payload_user, separators=(",", ":"))}],
     }
@@ -979,10 +1025,22 @@ async def explain_mood_viewer(
     if insight and not _looks_like_placeholder_test_note(insight):
         payload_user["li"] = insight[:400]
 
+    now_ctx_v = _now_in_user_tz(body.timeZoneId)
+    payload_user["ctx"] = {
+        "tod": now_ctx_v["period"],
+        "season": now_ctx_v["season"],
+        "weekend": now_ctx_v["is_weekend"],
+        "weekday_short": now_ctx_v["weekday_short"],
+    }
+
     caption = ""
     if ANTHROPIC_API_KEY:
         try:
-            caption = await explain_mood_caption_claude(payload_user, system=EXPLAIN_MOOD_VIEWER_SYSTEM)
+            caption = await explain_mood_caption_claude(
+                payload_user,
+                system=EXPLAIN_MOOD_VIEWER_SYSTEM,
+                max_tokens=168,
+            )
         except Exception as e:
             log.warning("Explain mood viewer Claude failed, using fallback: %s", e)
             caption = _fallback_explain_caption_viewer(
