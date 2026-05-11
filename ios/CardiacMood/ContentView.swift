@@ -178,8 +178,15 @@ struct ContentView: View {
       await hub.refreshLatestHeartRateFromHealth()
     }
     .onChange(of: scenePhase) { _, phase in
-      guard phase == .active else { return }
-      Task { await hub.refreshLatestHeartRateFromHealth() }
+      switch phase {
+      case .active:
+        Task { await hub.refreshLatestHeartRateFromHealth() }
+      case .inactive, .background:
+        // Push before user switches to MoodViewer; the debounced task often ran too late (1.5s).
+        Task { await hub.pushViewerContextNow() }
+      @unknown default:
+        break
+      }
     }
     .onAppear {
       if validMoods.contains(hub.lastMood) {
@@ -310,6 +317,12 @@ struct ContentView: View {
           Text(hub.lastUpdatedText)
             .font(.system(.caption, design: .rounded))
             .foregroundStyle(.secondary)
+        }
+        if let familyErr = hub.viewerContextSyncError {
+          Text(familyErr)
+            .font(.system(.caption, design: .rounded))
+            .foregroundStyle(.orange)
+            .fixedSize(horizontal: false, vertical: true)
         }
       }
       Spacer(minLength: 0)

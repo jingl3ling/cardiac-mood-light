@@ -138,7 +138,8 @@ struct LatestStateDTO: Codable {
 struct ViewerContextRequestBody: Codable {
   let deviceId: String
   let reportedHeartRateBpm: Double?
-  let moodInsight: String?
+  /// Always sent so the server replaces any stale `moodInsight` (e.g. HR-only sync used to omit this key).
+  let moodInsight: String
 }
 
 enum CardiacAPIError: Error {
@@ -281,23 +282,26 @@ struct CardiacAPIClient {
     return try JSONDecoder().decode(LatestStateDTO.self, from: data)
   }
 
-  /// Push Health BPM and/or mood line for the family viewer app (does not drive the lamp by itself).
+  /// Push Health BPM and mood line for the family viewer app (does not drive the lamp by itself).
+  /// `moodInsightLine` must always reflect the primary app’s caption (Claude or fallback), including `""` to clear stale server text.
   func postViewerContext(
     deviceId: String,
     reportedHeartRateBpm: Double?,
-    moodInsight: String?
+    moodInsightLine: String
   ) async throws {
-    let t = moodInsight?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-    let cap: String? = t.isEmpty ? nil : String(t.prefix(500))
-    let hr = reportedHeartRateBpm.map { min(230, max(30, $0)) }
-    guard hr != nil || cap != nil else { return }
+    let line = String(moodInsightLine.trimmingCharacters(in: .whitespacesAndNewlines).prefix(500))
+    let hr = reportedHeartRateBpm.flatMap { raw -> Double? in
+      guard raw.isFinite else { return nil }
+      return min(230, max(30, raw))
+    }
+    guard hr != nil || !line.isEmpty else { return }
     var req = URLRequest(url: Config.baseURL.appendingPathComponent("/v1/cardiac/viewer-context"))
     req.httpMethod = "POST"
     req.setValue("application/json", forHTTPHeaderField: "Content-Type")
     if !Config.apiKey.isEmpty {
       req.setValue(Config.apiKey, forHTTPHeaderField: "x-api-key")
     }
-    let body = ViewerContextRequestBody(deviceId: deviceId, reportedHeartRateBpm: hr, moodInsight: cap)
+    let body = ViewerContextRequestBody(deviceId: deviceId, reportedHeartRateBpm: hr, moodInsight: line)
     req.httpBody = try JSONEncoder().encode(body)
 
     let (_, resp) = try await session.data(for: req)

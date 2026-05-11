@@ -41,6 +41,9 @@ final class MoodHub: NSObject, ObservableObject {
   /// Debounce pushes to `/v1/cardiac/viewer-context` for the family viewer app.
   private var viewerContextPushTask: Task<Void, Never>?
 
+  /// Last failure pushing to `/v1/cardiac/viewer-context` (401, network, etc.); cleared on success.
+  @Published var viewerContextSyncError: String?
+
   /// After the user picks a mood tile, `/analyze` from Health must not leave the ESP on the HR-derived palette.
   private var lampFollowsManualTileSelection = false
   private var pinnedManualMoodId = "calm"
@@ -94,38 +97,51 @@ final class MoodHub: NSObject, ObservableObject {
     UserDefaults.standard.set(c, forKey: Self.udTestHeartbeatBpm)
   }
 
+  private static let viewerContextDebounceNs: UInt64 = 350_000_000
+
   private func scheduleViewerContextPush() {
     viewerContextPushTask?.cancel()
     viewerContextPushTask = Task {
-      try? await Task.sleep(nanoseconds: 1_500_000_000)
+      try? await Task.sleep(nanoseconds: Self.viewerContextDebounceNs)
       guard !Task.isCancelled else { return }
       await flushViewerContextToServer()
     }
   }
 
+  /// Sends current HR + mood line for MoodViewer. Prefer calling this when the app leaves the foreground so data reaches the server before the user opens the family app.
+  func pushViewerContextNow() async {
+    await flushViewerContextToServer()
+  }
+
   /// BPM to show on the family app: test override, else Apple Health, else lamp blink rate (so something always syncs).
   private func bpmForViewerContext() -> Double {
-    if testHeartbeatEnabled {
-      return min(220.0, max(30.0, testHeartbeatBpm))
-    }
-    if let hr = latestAppleHealthHeartRateBpm {
-      return min(220.0, max(30.0, hr))
-    }
-    return min(220.0, max(30.0, blinkBpm))
+    let raw: Double = {
+      if testHeartbeatEnabled { return testHeartbeatBpm }
+      if let hr = latestAppleHealthHeartRateBpm { return hr }
+      return blinkBpm
+    }()
+    guard raw.isFinite else { return 72.0 }
+    return min(220.0, max(30.0, raw))
   }
 
   private func flushViewerContextToServer() async {
     let hr = bpmForViewerContext()
-    let t = moodInsight.trimmingCharacters(in: .whitespacesAndNewlines)
-    let insightPayload = t.isEmpty ? nil : t
     do {
       try await api.postViewerContext(
         deviceId: Config.deviceId,
         reportedHeartRateBpm: hr,
-        moodInsight: insightPayload
+        moodInsightLine: moodInsight
       )
+      viewerContextSyncError = nil
+    } catch let err as CardiacAPIError {
+      switch err {
+      case .badStatus(let code):
+        viewerContextSyncError = "Could not sync to family app (HTTP \(code))."
+      case .decodeFailed:
+        viewerContextSyncError = "Could not sync to family app (bad response)."
+      }
     } catch {
-      // Family sync is best-effort; lamp path already surfaced errors on manual/analyze.
+      viewerContextSyncError = "Could not sync to family app: \(error.localizedDescription)"
     }
   }
 
@@ -462,11 +478,11 @@ final class MoodHub: NSObject, ObservableObject {
       )
       guard token == moodInsightGeneration else { return }
       moodInsight = caption
-      scheduleViewerContextPush()
+      await flushViewerContextToServer()
     } catch {
       guard token == moodInsightGeneration else { return }
       moodInsight = Self.localFallbackInsight(mood: moodKey, customName: customUserMoodName)
-      scheduleViewerContextPush()
+      await flushViewerContextToServer()
     }
   }
 
