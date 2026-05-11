@@ -1,3 +1,4 @@
+import CoreFoundation
 import Foundation
 import SwiftUI
 
@@ -16,6 +17,9 @@ final class ViewerViewModel: ObservableObject {
   private var pollTask: Task<Void, Never>?
   private var viewerCaptionScheduleTask: Task<Void, Never>?
 
+  /// Retains the Darwin notify observer for the app lifetime.
+  private var familyLampDarwinBox: MoodViewerFamilyDarwinBox?
+
   /// Little Lamp timestamps server mutations via `FamilySyncBeacon`; we skip redundant GET work until something newer arrives.
   private var handledBeaconThrough: TimeInterval = 0
 
@@ -30,6 +34,21 @@ final class ViewerViewModel: ObservableObject {
   private static let viewerMoods: Set<String> = ["calm", "stressed", "happy", "sad"]
 
   func startPolling() {
+    if familyLampDarwinBox == nil {
+      let box = MoodViewerFamilyDarwinBox { [weak self] in
+        Task { @MainActor in await self?.refresh() }
+      }
+      familyLampDarwinBox = box
+      CFNotificationCenterAddObserver(
+        CFNotificationCenterGetDarwinNotifyCenter(),
+        Unmanaged.passUnretained(box).toOpaque(),
+        moodViewerFamilyLampDarwinCallback,
+        FamilySyncBeacon.lampMutationDarwinName as CFString,
+        nil,
+        CFNotificationSuspensionBehavior.deliverImmediately
+      )
+    }
+
     pollTask?.cancel()
     pollTask = Task {
       var tick = 0
@@ -52,10 +71,10 @@ final class ViewerViewModel: ObservableObject {
     viewerCaptionScheduleTask = nil
   }
 
-  /// Immediate check when MoodViewer foregrounds — Little Lamp bumps a shared beacon on each successful API write.
+  /// Immediate check when MoodViewer foregrounds — Little Lamp bumps Darwin notify + optional app-group timestamp.
   func pollMainAppTriggeredRefreshIfNeeded() async {
     let stamp = FamilySyncBeacon.lastMainAppServerMutationAt()
-    /// Require `stamp > handledBeaconThrough` so the "never wrote beacon" pair (both 0) does not wrongly skip cross-device polls.
+    /// Require `stamp > handledBeaconThrough` so the (0,0) “no app group” pair does not suppress cross-device polls.
     if stamp <= handledBeaconThrough {
       return
     }
@@ -115,7 +134,8 @@ final class ViewerViewModel: ObservableObject {
         reportedHeartRateBpm: lampState?.reportedHeartRateBpm,
         reportedHeartRateAt: lampState?.reportedHeartRateAt,
         moodInsight: lampState?.moodInsight,
-        viewerContextUpdatedAt: lampState?.viewerContextUpdatedAt
+        viewerContextUpdatedAt: lampState?.viewerContextUpdatedAt,
+        healthHeartRateUiDetail: lampState?.healthHeartRateUiDetail
       )
       statusMessage = ""
       scheduleViewerFamilyCaptionGeneration()
@@ -143,7 +163,8 @@ final class ViewerViewModel: ObservableObject {
         reportedHeartRateBpm: lampState?.reportedHeartRateBpm,
         reportedHeartRateAt: lampState?.reportedHeartRateAt,
         moodInsight: lampState?.moodInsight,
-        viewerContextUpdatedAt: lampState?.viewerContextUpdatedAt
+        viewerContextUpdatedAt: lampState?.viewerContextUpdatedAt,
+        healthHeartRateUiDetail: lampState?.healthHeartRateUiDetail
       )
       statusMessage = ""
       scheduleViewerFamilyCaptionGeneration()
@@ -263,4 +284,28 @@ final class ViewerViewModel: ObservableObject {
       }
     }
   }
+}
+
+// MARK: - Darwin notify (Little Lamp → MoodViewer, same device)
+
+private final class MoodViewerFamilyDarwinBox {
+  let onFire: () -> Void
+  init(onFire: @escaping () -> Void) {
+    self.onFire = onFire
+  }
+
+  func fire() {
+    DispatchQueue.main.async { self.onFire() }
+  }
+}
+
+private func moodViewerFamilyLampDarwinCallback(
+  _: CFNotificationCenter?,
+  observer: UnsafeMutableRawPointer?,
+  _: CFNotificationName?,
+  _: UnsafeRawPointer?,
+  _: CFDictionary?
+) {
+  guard let observer else { return }
+  Unmanaged<MoodViewerFamilyDarwinBox>.fromOpaque(observer).takeUnretainedValue().fire()
 }

@@ -185,14 +185,18 @@ struct ViewerRootView: View {
     return s.reportedHeartRateBpm ?? s.blinkBpm
   }
 
-  /// `reportedHeartRateAt` from server (viewer-context / sync-blink), shown on the right of the BPM row.
-  private var heartbeatUpdatedAtRightLabel: String {
+  /// Same right-column copy as Cardiac Mood `appleHealthHeartRateDetail` when Little Lamp merges viewer-context; fallback matches pulse `Updated \(shortTime)`.
+  private var heartbeatRightDetail: String {
+    let synced = model.lampState?.healthHeartRateUiDetail?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    if !synced.isEmpty {
+      return synced
+    }
     guard let at = model.lampState?.reportedHeartRateAt, at > 0 else {
-      return "Updated at —"
+      return "—"
     }
     let d = Date(timeIntervalSince1970: at)
     let t = DateFormatter.localizedString(from: d, dateStyle: .none, timeStyle: .short)
-    return "Updated at \(t)"
+    return "Updated \(t)"
   }
 
   private var heartRateSection: some View {
@@ -208,15 +212,24 @@ struct ViewerRootView: View {
 
           Spacer(minLength: 8)
 
-          Text(heartbeatUpdatedAtRightLabel)
+          Text(heartbeatRightDetail)
             .font(.system(.caption, design: .rounded))
             .foregroundStyle(.secondary)
             .multilineTextAlignment(.trailing)
         }
       } else {
-        Text("Waiting for a sync from Little Lamp…")
-          .font(.system(.subheadline, design: .rounded))
-          .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 6) {
+          Text("Waiting for a sync from Little Lamp…")
+            .font(.system(.subheadline, design: .rounded))
+            .foregroundStyle(.secondary)
+          let offSync = model.lampState?.healthHeartRateUiDetail?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+          if !offSync.isEmpty {
+            Text(offSync)
+              .font(.system(.caption, design: .rounded))
+              .foregroundStyle(.secondary)
+              .fixedSize(horizontal: false, vertical: true)
+          }
+        }
       }
     }
   }

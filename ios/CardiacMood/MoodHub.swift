@@ -131,10 +131,15 @@ final class MoodHub: NSObject, ObservableObject {
       return t.isEmpty ? nil : t
     }()
     do {
+      let healthUi: String? = {
+        let t = appleHealthHeartRateDetail.trimmingCharacters(in: .whitespacesAndNewlines)
+        return t.isEmpty ? nil : t
+      }()
       try await api.postViewerContext(
         deviceId: Config.deviceId,
         reportedHeartRateBpm: hr,
-        moodInsightLine: insightLine
+        moodInsightLine: insightLine,
+        healthHeartRateUiDetailLine: healthUi
       )
       viewerContextSyncError = nil
       FamilySyncBeacon.markMainAppDidMutateServer()

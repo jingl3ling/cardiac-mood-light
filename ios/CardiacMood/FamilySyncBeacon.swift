@@ -1,14 +1,24 @@
+import CoreFoundation
 import Foundation
 
-/// Shared app-group bump so MoodViewer can GET `/latest` right after Little Lamp updates the server (same phone).
+/// Wakes MoodViewer right after Little Lamp writes lamp state (same device). Uses Darwin notify so it still works if App Group `UserDefaults` is unavailable.
 enum FamilySyncBeacon {
   /// Must match the App Group in both targets’ entitlements.
   static let suiteId = "group.com.cardiacmood.family"
   private static let lastPushKey = "littleLampMainAppLastServerMutationAt"
 
+  /// Same string in Cardiac Mood + MoodViewer — `CFNotificationCenter` Darwin deliver.
+  static let lampMutationDarwinName = "com.cardiacmood.familyLampStateDidChange"
+
   static func markMainAppDidMutateServer() {
-    guard let ud = UserDefaults(suiteName: suiteId) else { return }
-    ud.set(Date().timeIntervalSince1970, forKey: lastPushKey)
+    UserDefaults(suiteName: suiteId)?.set(Date().timeIntervalSince1970, forKey: lastPushKey)
+    CFNotificationCenterPostNotification(
+      CFNotificationCenterGetDarwinNotifyCenter(),
+      CFNotificationName(lampMutationDarwinName as CFString),
+      nil,
+      nil,
+      true
+    )
   }
 
   static func lastMainAppServerMutationAt() -> TimeInterval {

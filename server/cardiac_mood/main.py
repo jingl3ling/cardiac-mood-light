@@ -134,6 +134,11 @@ class ViewerContextBody(BaseModel):
     deviceId: str = Field(..., min_length=1, max_length=128)
     reportedHeartRateBpm: float | None = Field(None, ge=30.0, le=230.0)
     moodInsight: str | None = Field(None, max_length=500)
+    healthHeartRateUiDetail: str | None = Field(
+        None,
+        max_length=280,
+        description="Matches Cardiac Mood latest-Health caption (e.g. Updated 3:42 PM).",
+    )
 
 
 def require_api_key(x_api_key: str | None) -> None:
@@ -300,6 +305,7 @@ def merge_viewer_context(
     *,
     reported_hr: float | None,
     mood_insight: str | None,
+    health_hr_ui_detail: str | None,
 ) -> dict[str, Any]:
     row = dict(_ensure_device_row(device_id))
     now = time.time()
@@ -309,13 +315,21 @@ def merge_viewer_context(
     if mood_insight is not None:
         cleaned = mood_insight.strip()[:500]
         row["moodInsight"] = "" if _looks_like_placeholder_test_note(cleaned) else cleaned
+    if health_hr_ui_detail is not None:
+        row["healthHeartRateUiDetail"] = health_hr_ui_detail.strip()[:280]
     row["viewerContextUpdatedAt"] = now
     _STORE[device_id] = row
     return row
 
 
 VIEWER_CONTEXT_KEYS = frozenset(
-    {"reportedHeartRateBpm", "reportedHeartRateAt", "moodInsight", "viewerContextUpdatedAt"}
+    {
+        "reportedHeartRateBpm",
+        "reportedHeartRateAt",
+        "moodInsight",
+        "viewerContextUpdatedAt",
+        "healthHeartRateUiDetail",
+    }
 )
 
 
@@ -992,6 +1006,7 @@ async def post_viewer_context(
         body.deviceId,
         reported_hr=body.reportedHeartRateBpm,
         mood_insight=body.moodInsight,
+        health_hr_ui_detail=body.healthHeartRateUiDetail,
     )
     return {
         "ok": True,
@@ -1033,6 +1048,8 @@ def latest(
     out["moodInsight"] = mood_s
     if "viewerContextUpdatedAt" in row:
         out["viewerContextUpdatedAt"] = float(row["viewerContextUpdatedAt"])
+    hd = row.get("healthHeartRateUiDetail")
+    out["healthHeartRateUiDetail"] = "" if hd is None else str(hd)
     return out
 
 

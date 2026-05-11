@@ -92,10 +92,13 @@ struct LatestStateDTO: Codable {
   let reportedHeartRateAt: Double?
   let moodInsight: String?
   let viewerContextUpdatedAt: Double?
+  /// Cardiac Mood Health row caption (e.g. "Updated 3:42 PM"); same string as `appleHealthHeartRateDetail`.
+  let healthHeartRateUiDetail: String?
 
   enum CodingKeys: String, CodingKey {
     case mood, label, color, brightness, updatedAt, powerOn, blinkEnabled, blinkBpm
     case reportedHeartRateBpm, reportedHeartRateAt, moodInsight, viewerContextUpdatedAt
+    case healthHeartRateUiDetail
   }
 
   init(
@@ -110,7 +113,8 @@ struct LatestStateDTO: Codable {
     reportedHeartRateBpm: Double?,
     reportedHeartRateAt: Double?,
     moodInsight: String?,
-    viewerContextUpdatedAt: Double?
+    viewerContextUpdatedAt: Double?,
+    healthHeartRateUiDetail: String?
   ) {
     self.mood = mood
     self.label = label
@@ -124,6 +128,7 @@ struct LatestStateDTO: Codable {
     self.reportedHeartRateAt = reportedHeartRateAt
     self.moodInsight = moodInsight
     self.viewerContextUpdatedAt = viewerContextUpdatedAt
+    self.healthHeartRateUiDetail = healthHeartRateUiDetail
   }
 
   init(from decoder: Decoder) throws {
@@ -146,6 +151,7 @@ struct LatestStateDTO: Codable {
     reportedHeartRateAt = try c.decodeIfPresent(Double.self, forKey: .reportedHeartRateAt)
     moodInsight = try c.decodeIfPresent(String.self, forKey: .moodInsight)
     viewerContextUpdatedAt = try c.decodeIfPresent(Double.self, forKey: .viewerContextUpdatedAt)
+    healthHeartRateUiDetail = try c.decodeIfPresent(String.self, forKey: .healthHeartRateUiDetail)
   }
 }
 
@@ -154,6 +160,8 @@ struct ViewerContextRequestBody: Codable {
   let reportedHeartRateBpm: Double?
   /// Omitted when `nil` so HR-only pushes preserve the caption already merged on the server.
   let moodInsight: String?
+  /// Omitted when `nil` — Cardiac Mood Health UI line for MoodViewer (omit to keep previous).
+  let healthHeartRateUiDetail: String?
 }
 
 enum CardiacAPIError: Error {
@@ -356,7 +364,8 @@ struct CardiacAPIClient {
   func postViewerContext(
     deviceId: String,
     reportedHeartRateBpm: Double?,
-    moodInsightLine: String?
+    moodInsightLine: String?,
+    healthHeartRateUiDetailLine: String?
   ) async throws {
     let hr = reportedHeartRateBpm.flatMap { raw -> Double? in
       guard raw.isFinite else { return nil }
@@ -366,6 +375,10 @@ struct CardiacAPIClient {
       let t = String(raw.trimmingCharacters(in: .whitespacesAndNewlines).prefix(500))
       return t.isEmpty ? nil : t
     }
+    let healthUi: String? = healthHeartRateUiDetailLine.flatMap { raw in
+      let t = String(raw.trimmingCharacters(in: .whitespacesAndNewlines).prefix(280))
+      return t.isEmpty ? nil : t
+    }
     guard hr != nil || mood != nil else { return }
     var req = URLRequest(url: Config.baseURL.appendingPathComponent("/v1/cardiac/viewer-context"))
     req.httpMethod = "POST"
@@ -373,7 +386,12 @@ struct CardiacAPIClient {
     if !Config.apiKey.isEmpty {
       req.setValue(Config.apiKey, forHTTPHeaderField: "x-api-key")
     }
-    let body = ViewerContextRequestBody(deviceId: deviceId, reportedHeartRateBpm: hr, moodInsight: mood)
+    let body = ViewerContextRequestBody(
+      deviceId: deviceId,
+      reportedHeartRateBpm: hr,
+      moodInsight: mood,
+      healthHeartRateUiDetail: healthUi
+    )
     req.httpBody = try JSONEncoder().encode(body)
 
     let (_, resp) = try await session.data(for: req)
