@@ -318,6 +318,7 @@ final class MoodHub: NSObject, ObservableObject {
         )
         applyAnalyzeResponse(resp)
         lastError = ""
+        await pushViewerContextNow()
       } catch {
         lastError = String(describing: error)
       }
@@ -335,6 +336,7 @@ final class MoodHub: NSObject, ObservableObject {
       )
       applyAnalyzeResponse(resp)
       lastError = ""
+      await pushViewerContextNow()
     } catch {
       lastError = String(describing: error)
     }

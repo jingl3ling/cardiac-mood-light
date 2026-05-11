@@ -290,6 +290,11 @@ def _ensure_device_row(device_id: str) -> dict[str, Any]:
     )
 
 
+def _looks_like_placeholder_test_note(insight: str) -> bool:
+    """Strip known dev curl copy so it does not linger in MoodViewer."""
+    return (insight or "").strip().lower().rstrip(".").strip() == "test note from curl"
+
+
 def merge_viewer_context(
     device_id: str,
     *,
@@ -302,7 +307,8 @@ def merge_viewer_context(
         row["reportedHeartRateBpm"] = float(reported_hr)
         row["reportedHeartRateAt"] = now
     if mood_insight is not None:
-        row["moodInsight"] = mood_insight.strip()[:500]
+        cleaned = mood_insight.strip()[:500]
+        row["moodInsight"] = "" if _looks_like_placeholder_test_note(cleaned) else cleaned
     row["viewerContextUpdatedAt"] = now
     _STORE[device_id] = row
     return row
@@ -728,11 +734,15 @@ async def sync_blink(
     """Heartbeat BPM for ESP32 — does not rewrite lamp color, brightness, or mood."""
     require_api_key(x_api_key)
     bpm = max(30.0, min(220.0, float(body.blinkBpm)))
+    now_ts = time.time()
     row = _STORE.get(body.deviceId)
     if row:
         row["blinkBpm"] = bpm
         row["blinkEnabled"] = bool(body.blinkEnabled)
-        row["updatedAt"] = time.time()
+        row["updatedAt"] = now_ts
+        # Keep MoodViewer HR in sync with lamp pulse BPM (avoid stale viewer-context-only numbers).
+        row["reportedHeartRateBpm"] = float(bpm)
+        row["reportedHeartRateAt"] = now_ts
         _STORE[body.deviceId] = row
         state = row
     else:
@@ -746,6 +756,9 @@ async def sync_blink(
             blink_bpm=bpm,
             custom_label=None,
         )
+        state["reportedHeartRateBpm"] = float(bpm)
+        state["reportedHeartRateAt"] = now_ts
+        _STORE[body.deviceId] = state
     return {
         "ok": True,
         "mood": state["mood"],
@@ -884,7 +897,10 @@ def latest(
     # Include key whenever stored (even empty) so the family app decoder always sees mood lines when merged.
     if "moodInsight" in row:
         mi = row.get("moodInsight")
-        out["moodInsight"] = str(mi) if mi is not None else ""
+        s = str(mi) if mi is not None else ""
+        if _looks_like_placeholder_test_note(s):
+            s = ""
+        out["moodInsight"] = s
     if "viewerContextUpdatedAt" in row:
         out["viewerContextUpdatedAt"] = float(row["viewerContextUpdatedAt"])
     return out

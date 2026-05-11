@@ -105,12 +105,36 @@ struct ViewerRootView: View {
     }
   }
 
+  /// When blink is on, lamp `blinkBpm` tracks Health on the primary phone (`/sync-blink`); stale `reportedHeartRate*` can linger from older `/viewer-context` posts.
+  private var heartbeatBpmForDisplay: Double? {
+    guard let s = model.lampState else { return nil }
+    if (s.blinkEnabled == true), let blink = s.blinkBpm {
+      return blink
+    }
+    return s.reportedHeartRateBpm ?? s.blinkBpm
+  }
+
+  private var heartbeatRelativeUpdateText: String {
+    guard let s = model.lampState else { return "" }
+    let epoch: Double? = {
+      if s.blinkEnabled == true {
+        return s.updatedAt ?? s.reportedHeartRateAt
+      }
+      return s.reportedHeartRateAt ?? s.updatedAt
+    }()
+    guard let epoch else { return "" }
+    let d = Date(timeIntervalSince1970: epoch)
+    let f = RelativeDateTimeFormatter()
+    f.unitsStyle = .abbreviated
+    return "Updated \(f.localizedString(for: d, relativeTo: Date()))"
+  }
+
   private var heartRateBlock: some View {
     VStack(alignment: .leading, spacing: 8) {
       Label("Latest heartbeat (from their phone)", systemImage: "heart.fill")
         .font(.headline)
         .foregroundStyle(.pink)
-      if let bpm = model.lampState?.reportedHeartRateBpm {
+      if let bpm = heartbeatBpmForDisplay {
         HStack(alignment: .firstTextBaseline) {
           Text("\(Int(bpm.rounded()))")
             .font(.system(size: 44, weight: .bold, design: .rounded))
@@ -118,7 +142,7 @@ struct ViewerRootView: View {
           Text("BPM")
             .font(.title3.weight(.semibold))
         }
-        Text(reportedAtText)
+        Text(heartbeatRelativeUpdateText)
           .font(.caption)
           .foregroundStyle(.secondary)
       } else {
@@ -127,14 +151,6 @@ struct ViewerRootView: View {
           .foregroundStyle(.secondary)
       }
     }
-  }
-
-  private var reportedAtText: String {
-    guard let t = model.lampState?.reportedHeartRateAt else { return "" }
-    let d = Date(timeIntervalSince1970: t)
-    let f = RelativeDateTimeFormatter()
-    f.unitsStyle = .abbreviated
-    return "Updated \(f.localizedString(for: d, relativeTo: Date()))"
   }
 
   private var controlsBlock: some View {
