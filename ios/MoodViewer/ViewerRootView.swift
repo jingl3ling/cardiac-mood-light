@@ -23,10 +23,6 @@ struct ViewerRootView: View {
             }
 
             ViewerGlassCard {
-              moodNoteSection
-            }
-
-            ViewerGlassCard {
               viewerFamilyInsightSection
             }
 
@@ -149,40 +145,9 @@ struct ViewerRootView: View {
     .padding(.bottom, 2)
   }
 
-  private var moodNoteSection: some View {
-    VStack(alignment: .leading, spacing: 12) {
-      sectionHeader(icon: "text.quote", iconTint: Color.teal.opacity(0.82), title: "Mood note")
-
-      let trimmed = model.lampState?.moodInsight?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-      if trimmed.isEmpty {
-        Text("No mood note yet.")
-          .font(.system(.body, design: .rounded))
-          .foregroundStyle(.secondary)
-
-        Text("Little Lamp shares a sentence after Explain mood or heart-rate analyze · pull down to refresh.")
-          .font(.system(.caption, design: .rounded))
-          .foregroundStyle(.tertiary)
-          .fixedSize(horizontal: false, vertical: true)
-      } else {
-        Text(trimmed)
-          .font(.system(.body, design: .rounded))
-          .foregroundStyle(.primary)
-          .lineSpacing(3)
-          .fixedSize(horizontal: false, vertical: true)
-      }
-    }
-  }
-
   private var viewerFamilyInsightSection: some View {
     VStack(alignment: .leading, spacing: 12) {
       sectionHeader(icon: "sparkles", iconTint: Color.purple.opacity(0.82), title: "Family insight")
-
-      Text(
-        "A separate Claude thought for whoever checks in—not a replay of Little Lamp above. Uses today's lamp snapshot, BPM sync, and the wearer's mood note as quiet context."
-      )
-      .font(.system(.caption, design: .rounded))
-      .foregroundStyle(.tertiary)
-      .fixedSize(horizontal: false, vertical: true)
 
       if model.viewerFamilyCaptionLoading, model.viewerFamilyCaption.isEmpty {
         ProgressView()
@@ -207,26 +172,6 @@ struct ViewerRootView: View {
           .font(.system(.body, design: .rounded))
           .foregroundStyle(.secondary)
       }
-
-      Button {
-        Task { await model.regenerateViewerFamilyCaption() }
-      } label: {
-        Text("Generate again")
-          .font(.system(.subheadline, design: .rounded).weight(.semibold))
-          .foregroundStyle(accentPink)
-          .frame(maxWidth: .infinity)
-          .padding(.vertical, 10)
-          .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-              .fill(Color(uiColor: .secondarySystemGroupedBackground))
-              .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                  .strokeBorder(accentPink.opacity(0.22), lineWidth: 1)
-              )
-          )
-      }
-      .buttonStyle(.plain)
-      .disabled(model.lampState == nil || model.viewerFamilyCaptionLoading)
     }
   }
 

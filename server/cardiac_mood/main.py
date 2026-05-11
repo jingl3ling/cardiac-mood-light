@@ -335,11 +335,11 @@ Blend HR (h) with n when present; keep one sentence. Plain text, no markdown."""
 
 
 EXPLAIN_MOOD_VIEWER_SYSTEM = """JSON only: {"caption":"<one sentence ≤200 chars>"}
-You write for someone checking their loved one's "Little Lamp" from the MoodViewer app—not for the wearer. Warm, reassuring, observational snapshot; never diagnose or give medical directives.
-Same keys as the lamp app: m=mood palette (calm|stressed|happy|sad); n=YOUR (the reader's) local weekday/time cues; h=compact HR synced to lamp {r,b,c,s} approximating what they're seeing—no diagnoses.
-Optional li=Loved one's own short line from Little Lamp mobile—respect it but do NOT paraphrase or repeat verbatim; add a complementary angle for the checking-in reader.
-Optional u / uf = lamp label gibberish rules match the caregiver copy; never invent specific events (no fabricated news/fights/weather stories).
-Third-person-ish ("their lamp …") mixed with occasional gentle "you" to the reader is fine. Plain text caption, ≤200 chars, no markdown."""
+You write ONLY for someone checking their loved one's Little Lamp from MoodViewer—they are curious and a little tender; be sweet, clear, and easy to picture. Never diagnose or give medical directives.
+STICK TO FACTS YOU ARE GIVEN only: mood palette m (calm=stabilizing calm preset/steady amber family; stressed=wired/red-leaning cue; happy=light pink uplift; sad=quiet blue/downshift). If h lists BPM values, name the approximate number plainly ("pulse sitting near …"). Use n ONLY as a crisp time anchor ("Sunday evening")—never waffle.
+Optional li=Loved one's sync'd sentence from Little Lamp—you may reflect its emotional gist in fresh words—never quote or mimic it. Optional u/uf=lamp label; never override li's emotional truth.
+BANNED: vague filler ("whatever the weather," "however today feels," "life has seasons," astrology, cliché hedging about the universe). Do not invent dinners, fights, bosses, commute, storms, holidays not in payload. If data is sparse, spell out clearly what Little Lamp IS showing instead of fluff.
+Third-person gently ("their lamp…") plus "you're seeing…" OK. Plain text caption, ≤200 chars, no markdown."""
 
 
 def pack_manual(
@@ -426,7 +426,24 @@ def _everyday_context_fragment(local_date: str, mood: str) -> str:
     }.get(mood, "This mood fits the moment")
 
     extra = ", ".join(vibe[:2])
-    return f"{mood_line} — maybe {extra}, or whatever your day's weather feels like"
+    return f"{mood_line} — {extra}."
+
+
+def _viewer_insight_fallback_closing(local_date: str, mood: str) -> str:
+    """For MoodViewer non-Claude captions: factual mood + weekday, no airy filler."""
+    try:
+        import datetime as dt
+
+        wd = dt.date.fromisoformat(local_date).strftime("%A")
+    except ValueError:
+        wd = "Today"
+    preset = {
+        "calm": "steady calm gold style",
+        "stressed": "stressed deeper-red cue",
+        "happy": "light happy pink",
+        "sad": "soft blue sadness cue",
+    }.get(mood, f"{mood} style")
+    return f"As you peek in on {weekday}, Little Lamp is set to this app's {preset}—that's the concrete snapshot MoodViewer shows you."
 
 
 def _label_likely_gibberish(label: str) -> bool:
@@ -642,35 +659,31 @@ def _fallback_explain_caption_viewer(
     lamp_insight: str | None = None,
 ) -> str:
     """Deterministic line for MoodViewer while Claude absent."""
-    everyday = _everyday_context_fragment(local_date, mood)
+    closing = _viewer_insight_fallback_closing(local_date, mood)
     cu = (custom_mood_name or "").strip()[:48]
     li = (lamp_insight or "").strip()
     if li and _looks_like_placeholder_test_note(li):
         li = ""
 
-    def _hr_clause() -> str:
-        if not (has_hr and recent_bpms):
-            return ""
+    bpm_phrase: str | None = None
+    if has_hr and recent_bpms:
         avg = sum(recent_bpms) / len(recent_bpms)
-        return f"about {avg:.0f} BPM is showing"
-
-    hc = _hr_clause()
-    mood_clause = f"that soft {mood} glow"
+        bpm_phrase = f"their pulse syncing near {avg:.0f} BPM"
 
     if cu and not _label_likely_gibberish(cu):
-        if hc:
-            return f"You're peeking at their lamp—they noted «{cu}» while {hc} beside {mood_clause}—{everyday}."
-        return f"The lamp echoes their «{cu}» vibe in {mood_clause}—{everyday}."
+        if bpm_phrase:
+            return f"They labeled the lamp «{cu}», and you're seeing {bpm_phrase}; {closing}"
+        return f"They labeled the lamp «{cu}»; {closing}"
 
     if li:
         short = li[:100] + ("…" if len(li) > 100 else "")
-        if hc:
-            return f"They left «{short}» while {hc} beside {mood_clause}—{everyday}."
-        return f"They left «{short}» in {mood_clause}—{everyday}."
+        if bpm_phrase:
+            return f"Their synced note talks about «{short}», with {bpm_phrase}; {closing}"
+        return f"Their synced note talks about «{short}»; {closing}"
 
-    if hc:
-        return f"You're seeing {hc} beside {mood_clause}—{everyday}."
-    return f"The lamp is resting in {mood} light—{everyday}."
+    if bpm_phrase:
+        return f"You can see {bpm_phrase} on Little Lamp today; {closing}"
+    return closing
 
 
 async def explain_mood_caption_claude(

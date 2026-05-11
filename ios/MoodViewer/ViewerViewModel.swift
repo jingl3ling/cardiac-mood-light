@@ -77,11 +77,6 @@ final class ViewerViewModel: ObservableObject {
     }
   }
 
-  /// Explicit pull-to-refresh or button; bypasses stale-key caching.
-  func regenerateViewerFamilyCaption() async {
-    await generateViewerFamilyCaptionIfNeeded(force: true)
-  }
-
   func applyManual(
     brightness: Int,
     powerOn: Bool,
@@ -156,7 +151,7 @@ final class ViewerViewModel: ObservableObject {
     viewerCaptionScheduleTask?.cancel()
     viewerCaptionScheduleTask = Task {
       try? await Task.sleep(nanoseconds: 450_000_000)
-      await generateViewerFamilyCaptionIfNeeded(force: false)
+      await generateViewerFamilyCaptionIfNeeded()
     }
   }
 
@@ -201,14 +196,14 @@ final class ViewerViewModel: ObservableObject {
     return String(raw.prefix(48))
   }
 
-  private func generateViewerFamilyCaptionIfNeeded(force: Bool) async {
+  private func generateViewerFamilyCaptionIfNeeded() async {
     guard let key = viewerFamilyCaptionContextKey() else {
       viewerFamilyCaption = ""
       viewerInsightFetchedForKey = nil
       viewerFamilyCaptionError = ""
       return
     }
-    if !force, key == viewerInsightFetchedForKey, !viewerFamilyCaption.isEmpty {
+    if key == viewerInsightFetchedForKey, !viewerFamilyCaption.isEmpty {
       return
     }
 
