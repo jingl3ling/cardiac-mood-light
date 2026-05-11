@@ -139,6 +139,11 @@ class ViewerContextBody(BaseModel):
         max_length=280,
         description="Matches Cardiac Mood latest-Health caption (e.g. Updated 3:42 PM).",
     )
+    # Instantaneous pulse sample end (`latestHeartRateSample().endDate`) as UNIX seconds from Little Lamp device.
+    appleHealthHeartRateSampleEndAt: float | None = Field(
+        None,
+        description="0 or absent = clear stored sample end on merge; >0 stamps HealthKit pulse end.",
+    )
 
 
 def require_api_key(x_api_key: str | None) -> None:
@@ -306,6 +311,7 @@ def merge_viewer_context(
     reported_hr: float | None,
     mood_insight: str | None,
     health_hr_ui_detail: str | None,
+    apple_health_pulse_end_at: float | None,
 ) -> dict[str, Any]:
     row = dict(_ensure_device_row(device_id))
     now = time.time()
@@ -317,6 +323,12 @@ def merge_viewer_context(
         row["moodInsight"] = "" if _looks_like_placeholder_test_note(cleaned) else cleaned
     if health_hr_ui_detail is not None:
         row["healthHeartRateUiDetail"] = health_hr_ui_detail.strip()[:280]
+    if apple_health_pulse_end_at is not None:
+        pe = float(apple_health_pulse_end_at)
+        if pe <= 0:
+            row.pop("appleHealthHeartRateSampleEndAt", None)
+        elif math.isfinite(pe):
+            row["appleHealthHeartRateSampleEndAt"] = float(pe)
     row["viewerContextUpdatedAt"] = now
     _STORE[device_id] = row
     return row
@@ -329,6 +341,7 @@ VIEWER_CONTEXT_KEYS = frozenset(
         "moodInsight",
         "viewerContextUpdatedAt",
         "healthHeartRateUiDetail",
+        "appleHealthHeartRateSampleEndAt",
     }
 )
 
@@ -1007,6 +1020,7 @@ async def post_viewer_context(
         reported_hr=body.reportedHeartRateBpm,
         mood_insight=body.moodInsight,
         health_hr_ui_detail=body.healthHeartRateUiDetail,
+        apple_health_pulse_end_at=body.appleHealthHeartRateSampleEndAt,
     )
     return {
         "ok": True,
@@ -1050,6 +1064,8 @@ def latest(
         out["viewerContextUpdatedAt"] = float(row["viewerContextUpdatedAt"])
     hd = row.get("healthHeartRateUiDetail")
     out["healthHeartRateUiDetail"] = "" if hd is None else str(hd)
+    ape = row.get("appleHealthHeartRateSampleEndAt")
+    out["appleHealthHeartRateSampleEndAt"] = 0.0 if ape is None else float(ape)
     return out
 
 

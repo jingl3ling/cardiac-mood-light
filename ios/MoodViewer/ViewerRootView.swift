@@ -101,13 +101,6 @@ struct ViewerRootView: View {
           .font(.system(.title3, design: .rounded).weight(.bold))
           .foregroundStyle(.primary)
 
-        if let moodSubtitle {
-          Text(moodSubtitle)
-            .font(.system(.subheadline, design: .rounded))
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-        }
-
         Text(powerOn ? "Lamp is on" : "Lamp is off · waiting to glow again")
           .font(.system(.caption, design: .rounded))
           .foregroundStyle(.tertiary)
@@ -120,15 +113,6 @@ struct ViewerRootView: View {
     let m = (model.lampState?.mood ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
     if !m.isEmpty { return m.capitalized }
     return "Waiting…"
-  }
-
-  private var moodSubtitle: String? {
-    guard let raw = model.lampState?.label?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else {
-      return nil
-    }
-    let moodLower = (model.lampState?.mood ?? "").lowercased()
-    if raw.lowercased() == moodLower { return nil }
-    return raw
   }
 
   // MARK: - Sections
@@ -185,11 +169,18 @@ struct ViewerRootView: View {
     return s.reportedHeartRateBpm ?? s.blinkBpm
   }
 
-  /// Same right-column copy as Cardiac Mood `appleHealthHeartRateDetail` when Little Lamp merges viewer-context; fallback matches pulse `Updated \(shortTime)`.
+  /// Prefer Cardiac Mood’s synced Health caption; else HealthKit pulse `endDate` (viewer-context UNIX); avoid `reportedHeartRateAt` (server merge/refresh clock) for instantaneous pulse rows.
   private var heartbeatRightDetail: String {
     let synced = model.lampState?.healthHeartRateUiDetail?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     if !synced.isEmpty {
       return synced
+    }
+    if let se = model.lampState?.appleHealthHeartRateSampleEndAt,
+      se > 1
+    {
+      let d = Date(timeIntervalSince1970: se)
+      let t = DateFormatter.localizedString(from: d, dateStyle: .none, timeStyle: .short)
+      return "Updated \(t)"
     }
     guard let at = model.lampState?.reportedHeartRateAt, at > 0 else {
       return "—"

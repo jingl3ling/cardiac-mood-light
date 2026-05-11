@@ -135,7 +135,8 @@ final class ViewerViewModel: ObservableObject {
         reportedHeartRateAt: lampState?.reportedHeartRateAt,
         moodInsight: lampState?.moodInsight,
         viewerContextUpdatedAt: lampState?.viewerContextUpdatedAt,
-        healthHeartRateUiDetail: lampState?.healthHeartRateUiDetail
+        healthHeartRateUiDetail: lampState?.healthHeartRateUiDetail,
+        appleHealthHeartRateSampleEndAt: lampState?.appleHealthHeartRateSampleEndAt
       )
       statusMessage = ""
       scheduleViewerFamilyCaptionGeneration()
@@ -164,7 +165,8 @@ final class ViewerViewModel: ObservableObject {
         reportedHeartRateAt: lampState?.reportedHeartRateAt,
         moodInsight: lampState?.moodInsight,
         viewerContextUpdatedAt: lampState?.viewerContextUpdatedAt,
-        healthHeartRateUiDetail: lampState?.healthHeartRateUiDetail
+        healthHeartRateUiDetail: lampState?.healthHeartRateUiDetail,
+        appleHealthHeartRateSampleEndAt: lampState?.appleHealthHeartRateSampleEndAt
       )
       statusMessage = ""
       scheduleViewerFamilyCaptionGeneration()

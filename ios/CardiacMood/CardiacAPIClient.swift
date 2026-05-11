@@ -1,5 +1,10 @@
 import Foundation
 
+/// Builds `https://host/v1/cardiac/<tail…>` without a leading `/` in path components (matches `URL` rules on all OS versions).
+private func cardiacAPIURL(_ segments: String...) -> URL {
+  segments.reduce(Config.baseURL) { $0.appendingPathComponent($1, isDirectory: false) }
+}
+
 struct HRSampleDTO: Codable {
   let t: String
   let bpm: Double
@@ -56,7 +61,19 @@ struct ExplainMoodViewerRequestBody: Codable {
 
 struct ExplainMoodResponseBody: Codable {
   let ok: Bool?
-  let caption: String
+  let caption: String?
+}
+
+enum CardiacAPIError: Error {
+  case badStatus(Int)
+  case decodeFailed
+}
+
+private func explainCaptionOrThrow(from data: Data) throws -> String {
+  let decoded = try JSONDecoder().decode(ExplainMoodResponseBody.self, from: data)
+  let caption = (decoded.caption ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+  guard !caption.isEmpty else { throw CardiacAPIError.decodeFailed }
+  return caption
 }
 
 struct ManualLampRequestBody: Codable {
@@ -94,11 +111,14 @@ struct LatestStateDTO: Codable {
   let viewerContextUpdatedAt: Double?
   /// Cardiac Mood Health row caption (e.g. "Updated 3:42 PM"); same string as `appleHealthHeartRateDetail`.
   let healthHeartRateUiDetail: String?
+  /// UNIX seconds of HealthKit instantaneous pulse `endDate` from Little Lamp (>0 when a pulse row exists).
+  let appleHealthHeartRateSampleEndAt: Double?
 
   enum CodingKeys: String, CodingKey {
     case mood, label, color, brightness, updatedAt, powerOn, blinkEnabled, blinkBpm
     case reportedHeartRateBpm, reportedHeartRateAt, moodInsight, viewerContextUpdatedAt
     case healthHeartRateUiDetail
+    case appleHealthHeartRateSampleEndAt
   }
 
   init(
@@ -114,7 +134,8 @@ struct LatestStateDTO: Codable {
     reportedHeartRateAt: Double?,
     moodInsight: String?,
     viewerContextUpdatedAt: Double?,
-    healthHeartRateUiDetail: String?
+    healthHeartRateUiDetail: String?,
+    appleHealthHeartRateSampleEndAt: Double?
   ) {
     self.mood = mood
     self.label = label
@@ -129,6 +150,7 @@ struct LatestStateDTO: Codable {
     self.moodInsight = moodInsight
     self.viewerContextUpdatedAt = viewerContextUpdatedAt
     self.healthHeartRateUiDetail = healthHeartRateUiDetail
+    self.appleHealthHeartRateSampleEndAt = appleHealthHeartRateSampleEndAt
   }
 
   init(from decoder: Decoder) throws {
@@ -152,6 +174,7 @@ struct LatestStateDTO: Codable {
     moodInsight = try c.decodeIfPresent(String.self, forKey: .moodInsight)
     viewerContextUpdatedAt = try c.decodeIfPresent(Double.self, forKey: .viewerContextUpdatedAt)
     healthHeartRateUiDetail = try c.decodeIfPresent(String.self, forKey: .healthHeartRateUiDetail)
+    appleHealthHeartRateSampleEndAt = try c.decodeIfPresent(Double.self, forKey: .appleHealthHeartRateSampleEndAt)
   }
 }
 
@@ -162,11 +185,8 @@ struct ViewerContextRequestBody: Codable {
   let moodInsight: String?
   /// Omitted when `nil` — Cardiac Mood Health UI line for MoodViewer (omit to keep previous).
   let healthHeartRateUiDetail: String?
-}
-
-enum CardiacAPIError: Error {
-  case badStatus(Int)
-  case decodeFailed
+  /// Always sent: HealthKit pulse `endDate` as UNIX sec, or **0** to clear (resting-only / no instant sample).
+  let appleHealthHeartRateSampleEndAt: Double
 }
 
 struct CardiacAPIClient {
@@ -182,7 +202,7 @@ struct CardiacAPIClient {
     samples: [HRSampleDTO],
     timeZoneId: String?
   ) async throws -> AnalyzeResponseBody {
-    var req = URLRequest(url: Config.baseURL.appendingPathComponent("/v1/cardiac/analyze"))
+    var req = URLRequest(url: cardiacAPIURL("v1", "cardiac", "analyze"))
     req.httpMethod = "POST"
     req.setValue("application/json", forHTTPHeaderField: "Content-Type")
     if !Config.apiKey.isEmpty {
@@ -207,7 +227,7 @@ struct CardiacAPIClient {
     blinkBpm: Double,
     moodLabel: String?
   ) async throws -> AnalyzeResponseBody {
-    var req = URLRequest(url: Config.baseURL.appendingPathComponent("/v1/cardiac/manual"))
+    var req = URLRequest(url: cardiacAPIURL("v1", "cardiac", "manual"))
     req.httpMethod = "POST"
     req.setValue("application/json", forHTTPHeaderField: "Content-Type")
     if !Config.apiKey.isEmpty {
@@ -233,7 +253,7 @@ struct CardiacAPIClient {
   }
 
   func syncBlink(deviceId: String, blinkBpm: Double, blinkEnabled: Bool) async throws -> AnalyzeResponseBody {
-    var req = URLRequest(url: Config.baseURL.appendingPathComponent("/v1/cardiac/sync-blink"))
+    var req = URLRequest(url: cardiacAPIURL("v1", "cardiac", "sync-blink"))
     req.httpMethod = "POST"
     req.setValue("application/json", forHTTPHeaderField: "Content-Type")
     if !Config.apiKey.isEmpty {
@@ -260,7 +280,7 @@ struct CardiacAPIClient {
     analyzeSource: String?,
     customMoodName: String?
   ) async throws -> String {
-    var req = URLRequest(url: Config.baseURL.appendingPathComponent("/v1/cardiac/explain-mood"))
+    var req = URLRequest(url: cardiacAPIURL("v1", "cardiac", "explain-mood"))
     req.httpMethod = "POST"
     req.setValue("application/json", forHTTPHeaderField: "Content-Type")
     if !Config.apiKey.isEmpty {
@@ -282,8 +302,7 @@ struct CardiacAPIClient {
     let (data, resp) = try await session.data(for: req)
     guard let http = resp as? HTTPURLResponse else { throw CardiacAPIError.badStatus(-1) }
     guard (200 ... 299).contains(http.statusCode) else { throw CardiacAPIError.badStatus(http.statusCode) }
-    let decoded = try JSONDecoder().decode(ExplainMoodResponseBody.self, from: data)
-    return decoded.caption
+    return try explainCaptionOrThrow(from: data)
   }
 
   func explainMoodInsightViewer(
@@ -298,7 +317,7 @@ struct CardiacAPIClient {
     customMoodName: String?,
     lampMoodInsight: String?
   ) async throws -> String {
-    var req = URLRequest(url: Config.baseURL.appendingPathComponent("/v1/cardiac/explain-mood-viewer"))
+    var req = URLRequest(url: cardiacAPIURL("v1", "cardiac", "explain-mood-viewer"))
     req.httpMethod = "POST"
     req.setValue("application/json", forHTTPHeaderField: "Content-Type")
     if !Config.apiKey.isEmpty {
@@ -320,11 +339,9 @@ struct CardiacAPIClient {
 
     let (data, resp) = try await session.data(for: req)
     guard let http = resp as? HTTPURLResponse else { throw CardiacAPIError.badStatus(-1) }
-    /// Older backends may not ship `explain-mood-viewer`; fall back to caregiver prompt (no `lampMoodInsight`).
-    if !(200 ... 299).contains(http.statusCode),
-      http.statusCode == 404 || http.statusCode == 405
-    {
-      return try await explainMoodInsight(
+
+    func fallbackCaregiver() async throws -> String {
+      try await explainMoodInsight(
         deviceId: deviceId,
         mood: mood,
         localDate: localDate,
@@ -336,14 +353,24 @@ struct CardiacAPIClient {
         customMoodName: customMoodName
       )
     }
-    guard (200 ... 299).contains(http.statusCode) else { throw CardiacAPIError.badStatus(http.statusCode) }
-    let decoded = try JSONDecoder().decode(ExplainMoodResponseBody.self, from: data)
-    return decoded.caption
+
+    if http.statusCode == 401 {
+      throw CardiacAPIError.badStatus(401)
+    }
+    /// Avoid showing “could not load” when `/explain-mood-viewer` is missing (404/405), returns non-JSON, omits caption, or errors transiently — reuse caregiver prompt (`lampMoodInsight` is dropped).
+    if !(200 ... 299).contains(http.statusCode) {
+      return try await fallbackCaregiver()
+    }
+    do {
+      return try explainCaptionOrThrow(from: data)
+    } catch {
+      return try await fallbackCaregiver()
+    }
   }
 
   func getLatest(deviceId: String) async throws -> LatestStateDTO {
     var components = URLComponents(
-      url: Config.baseURL.appendingPathComponent("/v1/cardiac/latest"),
+      url: cardiacAPIURL("v1", "cardiac", "latest"),
       resolvingAgainstBaseURL: false
     )!
     components.queryItems = [URLQueryItem(name: "deviceId", value: deviceId)]
@@ -365,7 +392,8 @@ struct CardiacAPIClient {
     deviceId: String,
     reportedHeartRateBpm: Double?,
     moodInsightLine: String?,
-    healthHeartRateUiDetailLine: String?
+    healthHeartRateUiDetailLine: String?,
+    appleHealthHeartRateSampleEndAt: Double
   ) async throws {
     let hr = reportedHeartRateBpm.flatMap { raw -> Double? in
       guard raw.isFinite else { return nil }
@@ -380,7 +408,8 @@ struct CardiacAPIClient {
       return t.isEmpty ? nil : t
     }
     guard hr != nil || mood != nil else { return }
-    var req = URLRequest(url: Config.baseURL.appendingPathComponent("/v1/cardiac/viewer-context"))
+    let pulseEndUnix = appleHealthHeartRateSampleEndAt.isFinite ? appleHealthHeartRateSampleEndAt : 0
+    var req = URLRequest(url: cardiacAPIURL("v1", "cardiac", "viewer-context"))
     req.httpMethod = "POST"
     req.setValue("application/json", forHTTPHeaderField: "Content-Type")
     if !Config.apiKey.isEmpty {
@@ -390,7 +419,8 @@ struct CardiacAPIClient {
       deviceId: deviceId,
       reportedHeartRateBpm: hr,
       moodInsight: mood,
-      healthHeartRateUiDetail: healthUi
+      healthHeartRateUiDetail: healthUi,
+      appleHealthHeartRateSampleEndAt: pulseEndUnix
     )
     req.httpBody = try JSONEncoder().encode(body)
 

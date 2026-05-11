@@ -62,6 +62,8 @@ final class MoodHub: NSObject, ObservableObject {
   private var lastHealthAutoAnalyzedNewestSampleEnd: Date?
   /// Resting-only fallback when no instantaneous HR samples exist.
   private var lastHealthRestingAnalyzeKey: String?
+  /// `latestHeartRateSample().endDate` when the displayed BPM came from an instant pulse row — drives MoodViewer “Updated …”.
+  private var lastAppleHealthInstantPulseEnd: Date?
 
   private let knownMoods = Set(["calm", "stressed", "happy", "sad"])
 
@@ -135,11 +137,17 @@ final class MoodHub: NSObject, ObservableObject {
         let t = appleHealthHeartRateDetail.trimmingCharacters(in: .whitespacesAndNewlines)
         return t.isEmpty ? nil : t
       }()
+      /// Test heartbeat BPM is synthetic — never reuse a stale HealthKit pulse end for MoodViewer timestamps.
+      let pulseEndUnix: Double =
+        testHeartbeatEnabled
+          ? 0
+          : (lastAppleHealthInstantPulseEnd.map { max(0, $0.timeIntervalSince1970) } ?? 0)
       try await api.postViewerContext(
         deviceId: Config.deviceId,
         reportedHeartRateBpm: hr,
         moodInsightLine: insightLine,
-        healthHeartRateUiDetailLine: healthUi
+        healthHeartRateUiDetailLine: healthUi,
+        appleHealthHeartRateSampleEndAt: pulseEndUnix
       )
       viewerContextSyncError = nil
       FamilySyncBeacon.markMainAppDidMutateServer()
@@ -187,6 +195,7 @@ final class MoodHub: NSObject, ObservableObject {
       latestAppleHealthHeartRateBpm = nil
       appleHealthHeartRateDetail = "Health not available on this device."
       healthSnapshotRestingBpm = nil
+      lastAppleHealthInstantPulseEnd = nil
       scheduleViewerContextPush()
       return
     }
@@ -196,13 +205,16 @@ final class MoodHub: NSObject, ObservableObject {
     let pulse = await baseline.latestHeartRateSample()
     if let pulse {
       latestAppleHealthHeartRateBpm = pulse.bpm
+      lastAppleHealthInstantPulseEnd = pulse.endDate
       let t = DateFormatter.localizedString(from: pulse.endDate, dateStyle: .none, timeStyle: .short)
       appleHealthHeartRateDetail = "Updated \(t)"
     } else if let resting = healthSnapshotRestingBpm {
       latestAppleHealthHeartRateBpm = resting
+      lastAppleHealthInstantPulseEnd = nil
       appleHealthHeartRateDetail = "Latest resting heart rate in Health"
     } else {
       latestAppleHealthHeartRateBpm = nil
+      lastAppleHealthInstantPulseEnd = nil
       switch baseline.heartRateReadAuthorizationStatus() {
       case .notDetermined:
         appleHealthHeartRateDetail =
