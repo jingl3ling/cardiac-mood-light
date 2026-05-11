@@ -138,8 +138,8 @@ struct LatestStateDTO: Codable {
 struct ViewerContextRequestBody: Codable {
   let deviceId: String
   let reportedHeartRateBpm: Double?
-  /// Always sent so the server replaces any stale `moodInsight` (e.g. HR-only sync used to omit this key).
-  let moodInsight: String
+  /// Omitted when `nil` so HR-only pushes preserve the caption already merged on the server.
+  let moodInsight: String?
 }
 
 enum CardiacAPIError: Error {
@@ -282,26 +282,29 @@ struct CardiacAPIClient {
     return try JSONDecoder().decode(LatestStateDTO.self, from: data)
   }
 
-  /// Push Health BPM and mood line for the family viewer app (does not drive the lamp by itself).
-  /// `moodInsightLine` must always reflect the primary app’s caption (Claude or fallback), including `""` to clear stale server text.
+  /// Push Health BPM and optional mood line for the family viewer (does not drive the lamp).
+  /// Pass `nil` for `moodInsightLine` when Local has no caption so the server keeps the stored note.
   func postViewerContext(
     deviceId: String,
     reportedHeartRateBpm: Double?,
-    moodInsightLine: String
+    moodInsightLine: String?
   ) async throws {
-    let line = String(moodInsightLine.trimmingCharacters(in: .whitespacesAndNewlines).prefix(500))
     let hr = reportedHeartRateBpm.flatMap { raw -> Double? in
       guard raw.isFinite else { return nil }
       return min(230, max(30, raw))
     }
-    guard hr != nil || !line.isEmpty else { return }
+    let mood: String? = moodInsightLine.flatMap { raw in
+      let t = String(raw.trimmingCharacters(in: .whitespacesAndNewlines).prefix(500))
+      return t.isEmpty ? nil : t
+    }
+    guard hr != nil || mood != nil else { return }
     var req = URLRequest(url: Config.baseURL.appendingPathComponent("/v1/cardiac/viewer-context"))
     req.httpMethod = "POST"
     req.setValue("application/json", forHTTPHeaderField: "Content-Type")
     if !Config.apiKey.isEmpty {
       req.setValue(Config.apiKey, forHTTPHeaderField: "x-api-key")
     }
-    let body = ViewerContextRequestBody(deviceId: deviceId, reportedHeartRateBpm: hr, moodInsight: line)
+    let body = ViewerContextRequestBody(deviceId: deviceId, reportedHeartRateBpm: hr, moodInsight: mood)
     req.httpBody = try JSONEncoder().encode(body)
 
     let (_, resp) = try await session.data(for: req)

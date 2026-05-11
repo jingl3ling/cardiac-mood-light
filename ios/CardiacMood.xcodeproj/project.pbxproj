@@ -20,11 +20,14 @@
 		B7B9AC3855294263980C59C6 /* WorkoutHeartBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8E7C743104C4A459CB78048 /* WorkoutHeartBuffer.swift */; };
 		E1F2A3B4C5D60718293A4B5C010 /* MoodViewerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1F2A3B4C5D60718293A4B5C003 /* MoodViewerApp.swift */; };
 		E1F2A3B4C5D60718293A4B5C011 /* ViewerRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1F2A3B4C5D60718293A4B5C004 /* ViewerRootView.swift */; };
+		E1F2A3B4C5D60718293A4B5C087 /* ViewerChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1F2A3B4C5D60718293A4B5C086 /* ViewerChrome.swift */; };
 		E1F2A3B4C5D60718293A4B5C012 /* ColorHex.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1F2A3B4C5D60718293A4B5C005 /* ColorHex.swift */; };
 		E1F2A3B4C5D60718293A4B5C013 /* ViewerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1F2A3B4C5D60718293A4B5C006 /* ViewerViewModel.swift */; };
 		E1F2A3B4C5D60718293A4B5C014 /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B3CE7D4AA0C4CAF825A7B23 /* Config.swift */; };
 		E1F2A3B4C5D60718293A4B5C015 /* CardiacAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6EE2FF7881C43F086DD0C7C /* CardiacAPIClient.swift */; };
 		E1F2A3B4C5D60718293A4B5C01A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E1F2A3B4C5D60718293A4B5C019 /* Assets.xcassets */; };
+		E1F2A3B4C5D60718293A4B5C08A /* FamilySyncBeacon.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1F2A3B4C5D60718293A4B5C089 /* FamilySyncBeacon.swift */; };
+		E1F2A3B4C5D60718293A4B5C08B /* FamilySyncBeacon.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1F2A3B4C5D60718293A4B5C089 /* FamilySyncBeacon.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -49,6 +52,9 @@
 		E1F2A3B4C5D60718293A4B5C005 /* ColorHex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorHex.swift; sourceTree = "<group>"; };
 		E1F2A3B4C5D60718293A4B5C006 /* ViewerViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewerViewModel.swift; sourceTree = "<group>"; };
 		E1F2A3B4C5D60718293A4B5C019 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		E1F2A3B4C5D60718293A4B5C089 /* FamilySyncBeacon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilySyncBeacon.swift; sourceTree = "<group>"; };
+		E1F2A3B4C5D60718293A4B5C088 /* MoodViewer.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = MoodViewer.entitlements; sourceTree = "<group>"; };
+		E1F2A3B4C5D60718293A4B5C086 /* ViewerChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewerChrome.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -77,6 +83,7 @@
 				D6EE2FF7881C43F086DD0C7C /* CardiacAPIClient.swift */,
 				10FB14D283C14D7F91DFD292 /* HealthBaselineReader.swift */,
 				5D59F4FAFB1449F5944161DF /* MoodHub.swift */,
+				E1F2A3B4C5D60718293A4B5C089 /* FamilySyncBeacon.swift */,
 				896A306E52364B84974AE354 /* CardiacMood.entitlements */,
 				3DA2B632342B4AB1BF55B0CF /* Assets.xcassets */,
 			);
@@ -88,8 +95,10 @@
 			children = (
 				E1F2A3B4C5D60718293A4B5C003 /* MoodViewerApp.swift */,
 				E1F2A3B4C5D60718293A4B5C004 /* ViewerRootView.swift */,
+				E1F2A3B4C5D60718293A4B5C086 /* ViewerChrome.swift */,
 				E1F2A3B4C5D60718293A4B5C006 /* ViewerViewModel.swift */,
 				E1F2A3B4C5D60718293A4B5C005 /* ColorHex.swift */,
+				E1F2A3B4C5D60718293A4B5C088 /* MoodViewer.entitlements */,
 				E1F2A3B4C5D60718293A4B5C019 /* Assets.xcassets */,
 			);
 			path = MoodViewer;
@@ -214,6 +223,7 @@
 				C766C3D07A5E44549E84E30C /* CardiacAPIClient.swift in Sources */,
 				3FC4E7DBFF7E40F9B2BDB5C3 /* HealthBaselineReader.swift in Sources */,
 				3F567F5260CF4345AFCC7015 /* MoodHub.swift in Sources */,
+				E1F2A3B4C5D60718293A4B5C08A /* FamilySyncBeacon.swift in Sources */,
 			); runOnlyForDeploymentPostprocessing = 0; };
 		3E4214F1662F4073B49EBEC0 /* Sources */ = {
 			isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (
@@ -227,10 +237,12 @@
 			isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (
 				E1F2A3B4C5D60718293A4B5C010 /* MoodViewerApp.swift in Sources */,
 				E1F2A3B4C5D60718293A4B5C011 /* ViewerRootView.swift in Sources */,
+				E1F2A3B4C5D60718293A4B5C087 /* ViewerChrome.swift in Sources */,
 				E1F2A3B4C5D60718293A4B5C013 /* ViewerViewModel.swift in Sources */,
 				E1F2A3B4C5D60718293A4B5C012 /* ColorHex.swift in Sources */,
 				E1F2A3B4C5D60718293A4B5C014 /* Config.swift in Sources */,
 				E1F2A3B4C5D60718293A4B5C015 /* CardiacAPIClient.swift in Sources */,
+				E1F2A3B4C5D60718293A4B5C08B /* FamilySyncBeacon.swift in Sources */,
 			); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
@@ -382,6 +394,7 @@
 		E1F2A3B4C5D60718293A4B5C030 /* Debug */ = {
 			isa = XCBuildConfiguration; buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = MoodViewer/MoodViewer.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 877MZL68G8;
@@ -408,6 +421,7 @@
 		E1F2A3B4C5D60718293A4B5C031 /* Release */ = {
 			isa = XCBuildConfiguration; buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = MoodViewer/MoodViewer.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 877MZL68G8;

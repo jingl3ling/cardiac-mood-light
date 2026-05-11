@@ -894,13 +894,12 @@ def latest(
         out["reportedHeartRateBpm"] = float(row["reportedHeartRateBpm"])
     if "reportedHeartRateAt" in row and row["reportedHeartRateAt"] is not None:
         out["reportedHeartRateAt"] = float(row["reportedHeartRateAt"])
-    # Include key whenever stored (even empty) so the family app decoder always sees mood lines when merged.
-    if "moodInsight" in row:
-        mi = row.get("moodInsight")
-        s = str(mi) if mi is not None else ""
-        if _looks_like_placeholder_test_note(s):
-            s = ""
-        out["moodInsight"] = s
+    mi = row.get("moodInsight")
+    mood_s = "" if mi is None else str(mi)
+    if _looks_like_placeholder_test_note(mood_s):
+        mood_s = ""
+    # Always emit so MoodViewer decoding is stable (omit vs null was easy to misread as “no note”).
+    out["moodInsight"] = mood_s
     if "viewerContextUpdatedAt" in row:
         out["viewerContextUpdatedAt"] = float(row["viewerContextUpdatedAt"])
     return out

@@ -126,13 +126,18 @@ final class MoodHub: NSObject, ObservableObject {
 
   private func flushViewerContextToServer() async {
     let hr = bpmForViewerContext()
+    let insightLine: String? = {
+      let t = moodInsight.trimmingCharacters(in: .whitespacesAndNewlines)
+      return t.isEmpty ? nil : t
+    }()
     do {
       try await api.postViewerContext(
         deviceId: Config.deviceId,
         reportedHeartRateBpm: hr,
-        moodInsightLine: moodInsight
+        moodInsightLine: insightLine
       )
       viewerContextSyncError = nil
+      FamilySyncBeacon.markMainAppDidMutateServer()
     } catch let err as CardiacAPIError {
       switch err {
       case .badStatus(let code):
@@ -318,6 +323,7 @@ final class MoodHub: NSObject, ObservableObject {
         )
         applyAnalyzeResponse(resp)
         lastError = ""
+        FamilySyncBeacon.markMainAppDidMutateServer()
         await pushViewerContextNow()
       } catch {
         lastError = String(describing: error)
@@ -336,6 +342,7 @@ final class MoodHub: NSObject, ObservableObject {
       )
       applyAnalyzeResponse(resp)
       lastError = ""
+      FamilySyncBeacon.markMainAppDidMutateServer()
       await pushViewerContextNow()
     } catch {
       lastError = String(describing: error)
@@ -380,6 +387,7 @@ final class MoodHub: NSObject, ObservableObject {
       insightRestingBpm = resting
       insightRecentBpms = bpms
       applyAnalyzeResponse(resp)
+      FamilySyncBeacon.markMainAppDidMutateServer()
       return true
     } catch {
       lastError = String(describing: error)
@@ -606,6 +614,7 @@ final class MoodHub: NSObject, ObservableObject {
       }
       applyAnalyzeResponse(resp)
       lastError = ""
+      FamilySyncBeacon.markMainAppDidMutateServer()
       scheduleViewerContextPush()
     } catch {
       guard token == manualLampGeneration else { return }

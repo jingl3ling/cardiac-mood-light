@@ -8,16 +8,27 @@ final class ViewerViewModel: ObservableObject {
 
   private let api = CardiacAPIClient()
   private var pollTask: Task<Void, Never>?
-  /// Seconds between automatic GET `/latest` polls (plan: 5–10s).
-  private let pollIntervalSeconds: Double = 6
+
+  /// Little Lamp timestamps server mutations via `FamilySyncBeacon`; we skip redundant GET work until something newer arrives.
+  private var handledBeaconThrough: TimeInterval = 0
+
+  /// Watch app-group pings at ~1 Hz (cheap reads); unconditional `/latest` less often so radio stays asleep when nothing changed.
+  private let fastWakeCheckSeconds: Double = 1
+  /// Every N fast ticks (~55s default), GET `/latest` anyway (missed beacons / other clients).
+  private let unconditionalRefreshEveryTicks = 55
 
   func startPolling() {
     pollTask?.cancel()
     pollTask = Task {
+      var tick = 0
       while !Task.isCancelled {
-        await refresh()
-        let ns = UInt64(max(3, pollIntervalSeconds) * 1_000_000_000)
-        try? await Task.sleep(nanoseconds: ns)
+        await pollMainAppTriggeredRefreshIfNeeded()
+        tick += 1
+        if tick >= unconditionalRefreshEveryTicks {
+          tick = 0
+          await refresh()
+        }
+        try? await Task.sleep(nanoseconds: UInt64(max(0.35, fastWakeCheckSeconds) * 1_000_000_000))
       }
     }
   }
@@ -27,11 +38,21 @@ final class ViewerViewModel: ObservableObject {
     pollTask = nil
   }
 
+  /// Immediate check when MoodViewer foregrounds — Little Lamp bumps a shared beacon on each successful API write.
+  func pollMainAppTriggeredRefreshIfNeeded() async {
+    let stamp = FamilySyncBeacon.lastMainAppServerMutationAt()
+    if stamp <= handledBeaconThrough + 0.000_1 {
+      return
+    }
+    await refresh()
+  }
+
   func refresh() async {
     do {
       let s = try await api.getLatest(deviceId: Config.deviceId)
       lampState = s
       statusMessage = ""
+      handledBeaconThrough = max(handledBeaconThrough, FamilySyncBeacon.lastMainAppServerMutationAt())
     } catch {
       statusMessage = "Could not load lamp state. Check network and API key."
       lampState = nil
