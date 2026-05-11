@@ -312,6 +312,22 @@ struct CardiacAPIClient {
 
     let (data, resp) = try await session.data(for: req)
     guard let http = resp as? HTTPURLResponse else { throw CardiacAPIError.badStatus(-1) }
+    /// Older backends may not ship `explain-mood-viewer`; fall back to caregiver prompt (no `lampMoodInsight`).
+    if !(200 ... 299).contains(http.statusCode),
+      http.statusCode == 404 || http.statusCode == 405
+    {
+      return try await explainMoodInsight(
+        deviceId: deviceId,
+        mood: mood,
+        localDate: localDate,
+        timeZoneId: timeZoneId,
+        restingBpm: restingBpm,
+        recentBpms: recentBpms,
+        classifierReason: classifierReason,
+        analyzeSource: analyzeSource ?? "mood_viewer_fallback",
+        customMoodName: customMoodName
+      )
+    }
     guard (200 ... 299).contains(http.statusCode) else { throw CardiacAPIError.badStatus(http.statusCode) }
     let decoded = try JSONDecoder().decode(ExplainMoodResponseBody.self, from: data)
     return decoded.caption

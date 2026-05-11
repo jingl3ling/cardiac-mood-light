@@ -63,7 +63,8 @@ struct ViewerRootView: View {
     }
     .onChange(of: scenePhase) { _, phase in
       if phase == .active {
-        Task { await model.pollMainAppTriggeredRefreshIfNeeded() }
+        /// Full `/latest` refresh so cross-device mood changes show as soon as MoodViewer is foregrounded again.
+        Task { await model.refresh() }
       }
     }
     .onChange(of: model.lampState?.brightness) { _, newVal in
@@ -184,12 +185,14 @@ struct ViewerRootView: View {
     return s.reportedHeartRateBpm ?? s.blinkBpm
   }
 
-  /// Same idea as Cardiac Mood’s `appleHealthHeartRateDetail` (“Updated 3:42 PM”) — server stamps `reportedHeartRateAt` on viewer-context and sync-blink.
-  private var heartbeatUpdatedDetail: String? {
-    guard let at = model.lampState?.reportedHeartRateAt, at > 0 else { return nil }
+  /// `reportedHeartRateAt` from server (viewer-context / sync-blink), shown on the right of the BPM row.
+  private var heartbeatUpdatedAtRightLabel: String {
+    guard let at = model.lampState?.reportedHeartRateAt, at > 0 else {
+      return "Updated at —"
+    }
     let d = Date(timeIntervalSince1970: at)
     let t = DateFormatter.localizedString(from: d, dateStyle: .none, timeStyle: .short)
-    return "Updated \(t)"
+    return "Updated at \(t)"
   }
 
   private var heartRateSection: some View {
@@ -205,17 +208,11 @@ struct ViewerRootView: View {
 
           Spacer(minLength: 8)
 
-          if let tsLine = heartbeatUpdatedDetail {
-            Text(tsLine)
-              .font(.system(.caption, design: .rounded))
-              .foregroundStyle(.secondary)
-              .multilineTextAlignment(.trailing)
-          }
+          Text(heartbeatUpdatedAtRightLabel)
+            .font(.system(.caption, design: .rounded))
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.trailing)
         }
-
-        Text("From Little Lamp when it syncs heart rate or pulse blink.")
-          .font(.system(.caption, design: .rounded))
-          .foregroundStyle(.tertiary)
       } else {
         Text("Waiting for a sync from Little Lamp…")
           .font(.system(.subheadline, design: .rounded))

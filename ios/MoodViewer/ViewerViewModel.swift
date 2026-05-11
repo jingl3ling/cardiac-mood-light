@@ -21,8 +21,8 @@ final class ViewerViewModel: ObservableObject {
 
   /// Watch app-group pings at ~1 Hz (cheap reads); unconditional `/latest` less often so radio stays asleep when nothing changed.
   private let fastWakeCheckSeconds: Double = 1
-  /// Every N fast ticks (~55s default), GET `/latest` anyway (missed beacons / other clients).
-  private let unconditionalRefreshEveryTicks = 55
+  /// Every N fast ticks, GET `/latest` anyway — needed when Little Lamp runs on another device (App Group beacon is same-phone only).
+  private let unconditionalRefreshEveryTicks = 6
 
   private var viewerCaptionGeneration = 0
   private var viewerInsightFetchedForKey: String?
@@ -55,7 +55,8 @@ final class ViewerViewModel: ObservableObject {
   /// Immediate check when MoodViewer foregrounds — Little Lamp bumps a shared beacon on each successful API write.
   func pollMainAppTriggeredRefreshIfNeeded() async {
     let stamp = FamilySyncBeacon.lastMainAppServerMutationAt()
-    if stamp <= handledBeaconThrough + 0.000_1 {
+    /// Require `stamp > handledBeaconThrough` so the "never wrote beacon" pair (both 0) does not wrongly skip cross-device polls.
+    if stamp <= handledBeaconThrough {
       return
     }
     await refresh()
@@ -67,6 +68,10 @@ final class ViewerViewModel: ObservableObject {
       lampState = s
       statusMessage = ""
       handledBeaconThrough = max(handledBeaconThrough, FamilySyncBeacon.lastMainAppServerMutationAt())
+      if viewerFamilyCaptionContextKey() != viewerInsightFetchedForKey {
+        viewerFamilyCaption = ""
+        viewerFamilyCaptionError = ""
+      }
       scheduleViewerFamilyCaptionGeneration()
     } catch {
       statusMessage = "Could not load lamp state. Check network and API key."
