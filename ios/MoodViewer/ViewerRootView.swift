@@ -27,6 +27,10 @@ struct ViewerRootView: View {
             }
 
             ViewerGlassCard {
+              viewerFamilyInsightSection
+            }
+
+            ViewerGlassCard {
               heartRateSection
             }
 
@@ -169,6 +173,63 @@ struct ViewerRootView: View {
     }
   }
 
+  private var viewerFamilyInsightSection: some View {
+    VStack(alignment: .leading, spacing: 12) {
+      sectionHeader(icon: "sparkles", iconTint: Color.purple.opacity(0.82), title: "Family insight")
+
+      Text(
+        "A separate Claude thought for whoever checks in—not a replay of Little Lamp above. Uses today's lamp snapshot, BPM sync, and the wearer's mood note as quiet context."
+      )
+      .font(.system(.caption, design: .rounded))
+      .foregroundStyle(.tertiary)
+      .fixedSize(horizontal: false, vertical: true)
+
+      if model.viewerFamilyCaptionLoading, model.viewerFamilyCaption.isEmpty {
+        ProgressView()
+          .padding(.vertical, 4)
+      }
+
+      if model.viewerFamilyCaptionError.isEmpty == false, model.viewerFamilyCaption.isEmpty {
+        Text(model.viewerFamilyCaptionError)
+          .font(.system(.caption, design: .rounded).weight(.medium))
+          .foregroundStyle(Color.red.opacity(0.92))
+          .fixedSize(horizontal: false, vertical: true)
+      }
+
+      if !model.viewerFamilyCaption.isEmpty {
+        Text(model.viewerFamilyCaption)
+          .font(.system(.body, design: .rounded))
+          .foregroundStyle(.primary)
+          .lineSpacing(3)
+          .fixedSize(horizontal: false, vertical: true)
+      } else if !model.viewerFamilyCaptionLoading {
+        Text("Waiting for lamp data…")
+          .font(.system(.body, design: .rounded))
+          .foregroundStyle(.secondary)
+      }
+
+      Button {
+        Task { await model.regenerateViewerFamilyCaption() }
+      } label: {
+        Text("Generate again")
+          .font(.system(.subheadline, design: .rounded).weight(.semibold))
+          .foregroundStyle(accentPink)
+          .frame(maxWidth: .infinity)
+          .padding(.vertical, 10)
+          .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+              .fill(Color(uiColor: .secondarySystemGroupedBackground))
+              .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                  .strokeBorder(accentPink.opacity(0.22), lineWidth: 1)
+              )
+          )
+      }
+      .buttonStyle(.plain)
+      .disabled(model.lampState == nil || model.viewerFamilyCaptionLoading)
+    }
+  }
+
   /// When blink is on, lamp `blinkBpm` tracks Health on the primary phone (`/sync-blink`).
   private var heartbeatBpmForDisplay: Double? {
     guard let s = model.lampState else { return nil }
@@ -178,15 +239,34 @@ struct ViewerRootView: View {
     return s.reportedHeartRateBpm ?? s.blinkBpm
   }
 
+  /// Same idea as Cardiac Mood’s `appleHealthHeartRateDetail` (“Updated 3:42 PM”) — server stamps `reportedHeartRateAt` on viewer-context and sync-blink.
+  private var heartbeatUpdatedDetail: String? {
+    guard let at = model.lampState?.reportedHeartRateAt, at > 0 else { return nil }
+    let d = Date(timeIntervalSince1970: at)
+    let t = DateFormatter.localizedString(from: d, dateStyle: .none, timeStyle: .short)
+    return "Updated \(t)"
+  }
+
   private var heartRateSection: some View {
     VStack(alignment: .leading, spacing: 14) {
       sectionHeader(icon: "heart.circle.fill", iconTint: accentPink, title: "Latest heartbeat")
 
       if let bpm = heartbeatBpmForDisplay {
-        Text("\(Int(bpm.rounded())) BPM")
-          .font(.system(.title2, design: .rounded).weight(.bold))
-          .monospacedDigit()
-          .foregroundStyle(.primary)
+        HStack(alignment: .firstTextBaseline) {
+          Text("\(Int(bpm.rounded())) BPM")
+            .font(.system(.title2, design: .rounded).weight(.bold))
+            .monospacedDigit()
+            .foregroundStyle(.primary)
+
+          Spacer(minLength: 8)
+
+          if let tsLine = heartbeatUpdatedDetail {
+            Text(tsLine)
+              .font(.system(.caption, design: .rounded))
+              .foregroundStyle(.secondary)
+              .multilineTextAlignment(.trailing)
+          }
+        }
 
         Text("From Little Lamp when it syncs heart rate or pulse blink.")
           .font(.system(.caption, design: .rounded))

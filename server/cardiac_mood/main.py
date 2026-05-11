@@ -334,6 +334,14 @@ If uf=1 and u set: caption MUST match u's emotion—e.g. scared/fearful→tensio
 Blend HR (h) with n when present; keep one sentence. Plain text, no markdown."""
 
 
+EXPLAIN_MOOD_VIEWER_SYSTEM = """JSON only: {"caption":"<one sentence ≤200 chars>"}
+You write for someone checking their loved one's "Little Lamp" from the MoodViewer app—not for the wearer. Warm, reassuring, observational snapshot; never diagnose or give medical directives.
+Same keys as the lamp app: m=mood palette (calm|stressed|happy|sad); n=YOUR (the reader's) local weekday/time cues; h=compact HR synced to lamp {r,b,c,s} approximating what they're seeing—no diagnoses.
+Optional li=Loved one's own short line from Little Lamp mobile—respect it but do NOT paraphrase or repeat verbatim; add a complementary angle for the checking-in reader.
+Optional u / uf = lamp label gibberish rules match the caregiver copy; never invent specific events (no fabricated news/fights/weather stories).
+Third-person-ish ("their lamp …") mixed with occasional gentle "you" to the reader is fine. Plain text caption, ≤200 chars, no markdown."""
+
+
 def pack_manual(
     device_id: str,
     mood: str,
@@ -517,45 +525,6 @@ def _fallback_explain_caption(
     return f"{everyday}."
 
 
-async def explain_mood_caption_claude(payload_user: dict[str, Any]) -> str:
-    body = {
-        "model": CLAUDE_MODEL,
-        "max_tokens": 120,
-        "system": EXPLAIN_MOOD_SYSTEM,
-        "messages": [{"role": "user", "content": json.dumps(payload_user, separators=(",", ":"))}],
-    }
-
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        r = await client.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={
-                "x-api-key": ANTHROPIC_API_KEY,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
-            },
-            json=body,
-        )
-        r.raise_for_status()
-        data = r.json()
-
-    texts: list[str] = []
-    for block in data.get("content") or []:
-        if isinstance(block, dict) and block.get("type") == "text":
-            texts.append(block.get("text") or "")
-    raw = "".join(texts).strip()
-    if "```" in raw:
-        start = raw.find("{")
-        end = raw.rfind("}")
-        if start >= 0 and end > start:
-            raw = raw[start : end + 1]
-
-    parsed = json.loads(raw)
-    cap = str(parsed.get("caption", "")).strip()
-    if not cap:
-        raise ValueError("empty caption")
-    return cap[:220]
-
-
 class ExplainMoodBody(BaseModel):
     deviceId: str = Field(..., min_length=1, max_length=128)
     mood: str = Field(...)
@@ -604,6 +573,149 @@ class ExplainMoodBody(BaseModel):
         return out or None
 
 
+class ExplainMoodViewerBody(ExplainMoodBody):
+    """Little Lamp wearer fields plus optional line from caregiver phone for Claude context."""
+
+    lampMoodInsight: str | None = Field(
+        None,
+        max_length=400,
+        description="MoodInsight from viewer-context/Little Lamp; inform tone but do not copy verbatim.",
+    )
+
+    @field_validator("lampMoodInsight")
+    @classmethod
+    def strip_lamp_insight(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        s = v.strip()
+        return s if s else None
+
+
+def _explain_mood_user_payload(body: ExplainMoodBody) -> tuple[dict[str, Any], bool, str, str | None]:
+    rb = body.recentBpms
+    resting = body.restingBpm
+    cr_raw = (body.classifierReason or "").strip()
+    junk_reasons = {"", "manual_ios", "claude", "too few samples"}
+    cr_signal = cr_raw if cr_raw not in junk_reasons else ""
+
+    has_hr = bool(rb) or (resting is not None) or bool(cr_signal)
+
+    now_ctx = _now_in_user_tz(body.timeZoneId)
+    local_date_for_fallback = now_ctx["date_iso"]
+
+    h_compact: dict[str, Any] | None = None
+    if has_hr:
+        h_compact = {}
+        if resting is not None:
+            h_compact["r"] = round(float(resting), 1)
+        if rb:
+            tail = rb[-10:]
+            h_compact["b"] = [round(float(x), 1) for x in tail]
+        if cr_signal:
+            h_compact["c"] = cr_signal[:100]
+        src = (body.analyzeSource or "").strip()
+        if src:
+            h_compact["s"] = src[:24]
+        if len(h_compact) == 0:
+            h_compact = None
+
+    payload_user: dict[str, Any] = {
+        "m": body.mood,
+        "n": now_ctx["one_liner"],
+        "h": h_compact,
+    }
+    cu_in = (body.customMoodName or "").strip()[:48]
+    if cu_in:
+        payload_user["u"] = cu_in
+        payload_user["uf"] = 0 if _label_likely_gibberish(cu_in) else 1
+
+    return payload_user, has_hr, local_date_for_fallback, cr_signal or None
+
+
+def _fallback_explain_caption_viewer(
+    mood: str,
+    *,
+    has_hr: bool,
+    recent_bpms: list[float] | None,
+    local_date: str,
+    custom_mood_name: str | None = None,
+    lamp_insight: str | None = None,
+) -> str:
+    """Deterministic line for MoodViewer while Claude absent."""
+    everyday = _everyday_context_fragment(local_date, mood)
+    cu = (custom_mood_name or "").strip()[:48]
+    li = (lamp_insight or "").strip()
+    if li and _looks_like_placeholder_test_note(li):
+        li = ""
+
+    def _hr_clause() -> str:
+        if not (has_hr and recent_bpms):
+            return ""
+        avg = sum(recent_bpms) / len(recent_bpms)
+        return f"about {avg:.0f} BPM is showing"
+
+    hc = _hr_clause()
+    mood_clause = f"that soft {mood} glow"
+
+    if cu and not _label_likely_gibberish(cu):
+        if hc:
+            return f"You're peeking at their lamp—they noted «{cu}» while {hc} beside {mood_clause}—{everyday}."
+        return f"The lamp echoes their «{cu}» vibe in {mood_clause}—{everyday}."
+
+    if li:
+        short = li[:100] + ("…" if len(li) > 100 else "")
+        if hc:
+            return f"They left «{short}» while {hc} beside {mood_clause}—{everyday}."
+        return f"They left «{short}» in {mood_clause}—{everyday}."
+
+    if hc:
+        return f"You're seeing {hc} beside {mood_clause}—{everyday}."
+    return f"The lamp is resting in {mood} light—{everyday}."
+
+
+async def explain_mood_caption_claude(
+    payload_user: dict[str, Any],
+    *,
+    system: str = EXPLAIN_MOOD_SYSTEM,
+) -> str:
+    body = {
+        "model": CLAUDE_MODEL,
+        "max_tokens": 120,
+        "system": system,
+        "messages": [{"role": "user", "content": json.dumps(payload_user, separators=(",", ":"))}],
+    }
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        r = await client.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key": ANTHROPIC_API_KEY,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+            json=body,
+        )
+        r.raise_for_status()
+        data = r.json()
+
+    texts: list[str] = []
+    for block in data.get("content") or []:
+        if isinstance(block, dict) and block.get("type") == "text":
+            texts.append(block.get("text") or "")
+    raw = "".join(texts).strip()
+    if "```" in raw:
+        start = raw.find("{")
+        end = raw.rfind("}")
+        if start >= 0 and end > start:
+            raw = raw[start : end + 1]
+
+    parsed = json.loads(raw)
+    cap = str(parsed.get("caption", "")).strip()
+    if not cap:
+        raise ValueError("empty caption")
+    return cap[:220]
+
+
 _INDEX_HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -629,6 +741,7 @@ _INDEX_HTML = """<!DOCTYPE html>
     <li><code>POST /v1/cardiac/manual</code> — set color/brightness from phone (requires <code>x-api-key</code> when configured)</li>
     <li><code>POST /v1/cardiac/sync-blink</code> — update blink BPM only (requires <code>x-api-key</code> when configured)</li>
     <li><code>POST /v1/cardiac/explain-mood</code> — Claude mood caption for the iOS lamp UI (requires <code>x-api-key</code> when configured)</li>
+    <li><code>POST /v1/cardiac/explain-mood-viewer</code> — second Claude caption for MoodViewer readers (requires <code>x-api-key</code> when configured)</li>
     <li><code>GET /v1/cardiac/latest</code> — latest mood for ESP32 (requires <code>x-api-key</code> when configured)</li>
   </ul>
 </body>
@@ -782,55 +895,19 @@ async def explain_mood(
     """Generate a short user-facing sentence for why the lamp feels like this mood (Claude or fallback)."""
     require_api_key(x_api_key)
 
+    payload_user, has_hr, local_date_for_fallback, cr_signal = _explain_mood_user_payload(body)
     rb = body.recentBpms
-    resting = body.restingBpm
-    cr_raw = (body.classifierReason or "").strip()
-    junk_reasons = {"", "manual_ios", "claude", "too few samples"}
-    cr_signal = cr_raw if cr_raw not in junk_reasons else ""
-
-    has_hr = bool(rb) or (resting is not None) or bool(cr_signal)
-
-    now_ctx = _now_in_user_tz(body.timeZoneId)
-    # Fallback copy uses the same calendar date as Claude (timezone-aware on server)
-    local_date_for_fallback = now_ctx["date_iso"]
-
-    h_compact: dict[str, Any] | None = None
-    if has_hr:
-        h_compact = {}
-        if resting is not None:
-            h_compact["r"] = round(float(resting), 1)
-        if rb:
-            tail = rb[-10:]
-            h_compact["b"] = [round(float(x), 1) for x in tail]
-        if cr_signal:
-            h_compact["c"] = cr_signal[:100]
-        src = (body.analyzeSource or "").strip()
-        if src:
-            h_compact["s"] = src[:24]
-        if len(h_compact) == 0:
-            h_compact = None
-
-    # Minimal user message: short keys, tiny payload (u=user mood word when set)
-    payload_user: dict[str, Any] = {
-        "m": body.mood,
-        "n": now_ctx["one_liner"],
-        "h": h_compact,
-    }
-    cu_in = (body.customMoodName or "").strip()[:48]
-    if cu_in:
-        payload_user["u"] = cu_in
-        payload_user["uf"] = 0 if _label_likely_gibberish(cu_in) else 1
 
     caption = ""
     if ANTHROPIC_API_KEY:
         try:
-            caption = await explain_mood_caption_claude(payload_user)
+            caption = await explain_mood_caption_claude(payload_user, system=EXPLAIN_MOOD_SYSTEM)
         except Exception as e:
             log.warning("Explain mood Claude failed, using fallback: %s", e)
             caption = _fallback_explain_caption(
                 body.mood,
                 has_hr=has_hr,
-                classifier_reason=(cr_signal or None),
+                classifier_reason=cr_signal,
                 recent_bpms=rb,
                 local_date=local_date_for_fallback,
                 custom_mood_name=body.customMoodName,
@@ -839,10 +916,51 @@ async def explain_mood(
         caption = _fallback_explain_caption(
             body.mood,
             has_hr=has_hr,
-            classifier_reason=(cr_signal or None),
+            classifier_reason=cr_signal,
             recent_bpms=rb,
             local_date=local_date_for_fallback,
             custom_mood_name=body.customMoodName,
+        )
+
+    return {"ok": True, "caption": caption}
+
+
+@app.post("/v1/cardiac/explain-mood-viewer")
+async def explain_mood_viewer(
+    body: ExplainMoodViewerBody,
+    x_api_key: str | None = Header(default=None, alias="x-api-key"),
+) -> dict[str, Any]:
+    """Second Claude pass: warm one-liner for the MoodViewer reader (distinct system prompt)."""
+    require_api_key(x_api_key)
+
+    payload_user, has_hr, local_date_for_fallback, cr_signal = _explain_mood_user_payload(body)
+    rb = body.recentBpms
+    insight = (body.lampMoodInsight or "").strip()
+    if insight and not _looks_like_placeholder_test_note(insight):
+        payload_user["li"] = insight[:400]
+
+    caption = ""
+    if ANTHROPIC_API_KEY:
+        try:
+            caption = await explain_mood_caption_claude(payload_user, system=EXPLAIN_MOOD_VIEWER_SYSTEM)
+        except Exception as e:
+            log.warning("Explain mood viewer Claude failed, using fallback: %s", e)
+            caption = _fallback_explain_caption_viewer(
+                body.mood,
+                has_hr=has_hr,
+                recent_bpms=rb,
+                local_date=local_date_for_fallback,
+                custom_mood_name=body.customMoodName,
+                lamp_insight=body.lampMoodInsight,
+            )
+    else:
+        caption = _fallback_explain_caption_viewer(
+            body.mood,
+            has_hr=has_hr,
+            recent_bpms=rb,
+            local_date=local_date_for_fallback,
+            custom_mood_name=body.customMoodName,
+            lamp_insight=body.lampMoodInsight,
         )
 
     return {"ok": True, "caption": caption}

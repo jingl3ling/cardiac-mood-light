@@ -6,8 +6,15 @@ final class ViewerViewModel: ObservableObject {
   @Published var lampState: LatestStateDTO?
   @Published var statusMessage = ""
 
+  /// Separate Claude caption for whoever is checking MoodViewer — distinct prompt from `/explain-mood` on Little Lamp.
+  @Published private(set) var viewerFamilyCaption = ""
+  @Published private(set) var viewerFamilyCaptionLoading = false
+  /// Set when Claude/network fails while caption is empty.
+  @Published var viewerFamilyCaptionError = ""
+
   private let api = CardiacAPIClient()
   private var pollTask: Task<Void, Never>?
+  private var viewerCaptionScheduleTask: Task<Void, Never>?
 
   /// Little Lamp timestamps server mutations via `FamilySyncBeacon`; we skip redundant GET work until something newer arrives.
   private var handledBeaconThrough: TimeInterval = 0
@@ -16,6 +23,11 @@ final class ViewerViewModel: ObservableObject {
   private let fastWakeCheckSeconds: Double = 1
   /// Every N fast ticks (~55s default), GET `/latest` anyway (missed beacons / other clients).
   private let unconditionalRefreshEveryTicks = 55
+
+  private var viewerCaptionGeneration = 0
+  private var viewerInsightFetchedForKey: String?
+
+  private static let viewerMoods: Set<String> = ["calm", "stressed", "happy", "sad"]
 
   func startPolling() {
     pollTask?.cancel()
@@ -36,6 +48,8 @@ final class ViewerViewModel: ObservableObject {
   func stopPolling() {
     pollTask?.cancel()
     pollTask = nil
+    viewerCaptionScheduleTask?.cancel()
+    viewerCaptionScheduleTask = nil
   }
 
   /// Immediate check when MoodViewer foregrounds — Little Lamp bumps a shared beacon on each successful API write.
@@ -53,10 +67,19 @@ final class ViewerViewModel: ObservableObject {
       lampState = s
       statusMessage = ""
       handledBeaconThrough = max(handledBeaconThrough, FamilySyncBeacon.lastMainAppServerMutationAt())
+      scheduleViewerFamilyCaptionGeneration()
     } catch {
       statusMessage = "Could not load lamp state. Check network and API key."
       lampState = nil
+      viewerFamilyCaption = ""
+      viewerInsightFetchedForKey = nil
+      viewerFamilyCaptionLoading = false
     }
+  }
+
+  /// Explicit pull-to-refresh or button; bypasses stale-key caching.
+  func regenerateViewerFamilyCaption() async {
+    await generateViewerFamilyCaptionIfNeeded(force: true)
   }
 
   func applyManual(
@@ -95,6 +118,7 @@ final class ViewerViewModel: ObservableObject {
         viewerContextUpdatedAt: lampState?.viewerContextUpdatedAt
       )
       statusMessage = ""
+      scheduleViewerFamilyCaptionGeneration()
     } catch {
       statusMessage = "Update failed. Try again."
     }
@@ -122,8 +146,121 @@ final class ViewerViewModel: ObservableObject {
         viewerContextUpdatedAt: lampState?.viewerContextUpdatedAt
       )
       statusMessage = ""
+      scheduleViewerFamilyCaptionGeneration()
     } catch {
       statusMessage = "Blink update failed."
+    }
+  }
+
+  private func scheduleViewerFamilyCaptionGeneration() {
+    viewerCaptionScheduleTask?.cancel()
+    viewerCaptionScheduleTask = Task {
+      try? await Task.sleep(nanoseconds: 450_000_000)
+      await generateViewerFamilyCaptionIfNeeded(force: false)
+    }
+  }
+
+  private static func viewerLocalCalendarDateString() -> String {
+    let f = DateFormatter()
+    f.calendar = Calendar.current
+    f.locale = Locale(identifier: "en_US_POSIX")
+    f.timeZone = TimeZone.current
+    f.dateFormat = "yyyy-MM-dd"
+    return f.string(from: Date())
+  }
+
+  /// Mirrors `heartbeatBpmForDisplay` in `ViewerRootView` for explain payload BPM.
+  private static func heartbeatBpmForExplain(_ s: LatestStateDTO?) -> Double? {
+    guard let s else { return nil }
+    if (s.blinkEnabled == true), let blink = s.blinkBpm {
+      return blink
+    }
+    return s.reportedHeartRateBpm ?? s.blinkBpm
+  }
+
+  private func viewerFamilyCaptionContextKey() -> String? {
+    guard let s = lampState else { return nil }
+    let mood = s.mood.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+    guard Self.viewerMoods.contains(mood) else { return nil }
+
+    let bpmPart: String = {
+      guard let v = Self.heartbeatBpmForExplain(s), v.isFinite else { return "_" }
+      return "\(Int(v.rounded()))"
+    }()
+    let li = (s.moodInsight ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    let liKey = String(li.prefix(120))
+    return "\(mood)|\(bpmPart)|\(liKey)"
+  }
+
+  private func customMoodLabelForExplain(_ s: LatestStateDTO) -> String? {
+    guard let raw = s.label?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else {
+      return nil
+    }
+    let moodLower = s.mood.lowercased()
+    if raw.lowercased() == moodLower { return nil }
+    return String(raw.prefix(48))
+  }
+
+  private func generateViewerFamilyCaptionIfNeeded(force: Bool) async {
+    guard let key = viewerFamilyCaptionContextKey() else {
+      viewerFamilyCaption = ""
+      viewerInsightFetchedForKey = nil
+      viewerFamilyCaptionError = ""
+      return
+    }
+    if !force, key == viewerInsightFetchedForKey, !viewerFamilyCaption.isEmpty {
+      return
+    }
+
+    viewerCaptionGeneration += 1
+    let token = viewerCaptionGeneration
+    viewerFamilyCaptionLoading = true
+    viewerFamilyCaptionError = ""
+    defer {
+      if token == viewerCaptionGeneration {
+        viewerFamilyCaptionLoading = false
+      }
+    }
+
+    guard let s = lampState else { return }
+    let mood = s.mood.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+    guard Self.viewerMoods.contains(mood) else {
+      viewerFamilyCaption = ""
+      viewerFamilyCaptionError = ""
+      return
+    }
+
+    var recent: [Double]?
+    if let bpm = Self.heartbeatBpmForExplain(s), bpm.isFinite {
+      recent = [min(230, max(30, bpm))]
+    }
+
+    let lampInsight: String? = {
+      let t = (s.moodInsight ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+      return t.isEmpty ? nil : String(t.prefix(400))
+    }()
+
+    do {
+      let caption = try await api.explainMoodInsightViewer(
+        deviceId: Config.deviceId,
+        mood: mood,
+        localDate: Self.viewerLocalCalendarDateString(),
+        timeZoneId: TimeZone.current.identifier,
+        restingBpm: nil,
+        recentBpms: recent,
+        classifierReason: nil,
+        analyzeSource: "mood_viewer",
+        customMoodName: customMoodLabelForExplain(s),
+        lampMoodInsight: lampInsight
+      )
+      guard token == viewerCaptionGeneration else { return }
+      viewerFamilyCaption = caption
+      viewerInsightFetchedForKey = key
+    } catch {
+      guard token == viewerCaptionGeneration else { return }
+      if viewerFamilyCaption.isEmpty {
+        viewerFamilyCaptionError = "Could not load family insight."
+      }
     }
   }
 }

@@ -40,6 +40,20 @@ struct ExplainMoodRequestBody: Codable {
   let customMoodName: String?
 }
 
+/// MoodViewer-only: same POST shape as Explain with optional Little Lamp caption for Claude context (`li` on server).
+struct ExplainMoodViewerRequestBody: Codable {
+  let deviceId: String
+  let mood: String
+  let localDate: String
+  let timeZoneId: String
+  let restingBpm: Double?
+  let recentBpms: [Double]?
+  let classifierReason: String?
+  let analyzeSource: String?
+  let customMoodName: String?
+  let lampMoodInsight: String?
+}
+
 struct ExplainMoodResponseBody: Codable {
   let ok: Bool?
   let caption: String
@@ -254,6 +268,45 @@ struct CardiacAPIClient {
       classifierReason: classifierReason,
       analyzeSource: analyzeSource,
       customMoodName: customMoodName
+    )
+    req.httpBody = try JSONEncoder().encode(body)
+
+    let (data, resp) = try await session.data(for: req)
+    guard let http = resp as? HTTPURLResponse else { throw CardiacAPIError.badStatus(-1) }
+    guard (200 ... 299).contains(http.statusCode) else { throw CardiacAPIError.badStatus(http.statusCode) }
+    let decoded = try JSONDecoder().decode(ExplainMoodResponseBody.self, from: data)
+    return decoded.caption
+  }
+
+  func explainMoodInsightViewer(
+    deviceId: String,
+    mood: String,
+    localDate: String,
+    timeZoneId: String,
+    restingBpm: Double?,
+    recentBpms: [Double]?,
+    classifierReason: String?,
+    analyzeSource: String?,
+    customMoodName: String?,
+    lampMoodInsight: String?
+  ) async throws -> String {
+    var req = URLRequest(url: Config.baseURL.appendingPathComponent("/v1/cardiac/explain-mood-viewer"))
+    req.httpMethod = "POST"
+    req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    if !Config.apiKey.isEmpty {
+      req.setValue(Config.apiKey, forHTTPHeaderField: "x-api-key")
+    }
+    let body = ExplainMoodViewerRequestBody(
+      deviceId: deviceId,
+      mood: mood,
+      localDate: localDate,
+      timeZoneId: timeZoneId,
+      restingBpm: restingBpm,
+      recentBpms: recentBpms,
+      classifierReason: classifierReason,
+      analyzeSource: analyzeSource,
+      customMoodName: customMoodName,
+      lampMoodInsight: lampMoodInsight
     )
     req.httpBody = try JSONEncoder().encode(body)
 
